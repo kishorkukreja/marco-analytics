@@ -368,7 +368,7 @@ const Dashboard = () => {
       </motion.div>
 
       {/* Trend + Tabbed Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="lg:col-span-2 kpi-card">
           <h3 className="text-sm font-semibold mb-4">Cost, Revenue & Margin Trend</h3>
           <ResponsiveContainer width="100%" height={280}>
