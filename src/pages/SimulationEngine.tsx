@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FlaskConical, ArrowRight, AlertTriangle, CheckCircle2, Info, Zap } from "lucide-react";
+import { FlaskConical, ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { skuMaster, materialMaster, bomTable, supplierMaster, calculateSimilarity, calculateRiskScore, simulateLandedCost } from "@/data/mockData";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, ReferenceLine } from "recharts";
 
 const SimulationEngine = () => {
   const [selectedSKU, setSelectedSKU] = useState(skuMaster[0].id);
@@ -14,6 +15,10 @@ const SimulationEngine = () => {
   const [selectedSubstitute, setSelectedSubstitute] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
   const [simComplete, setSimComplete] = useState(false);
+  const [monteCarloEnabled, setMonteCarloEnabled] = useState(false);
+  const [mcRunning, setMcRunning] = useState(false);
+  const [mcIterations, setMcIterations] = useState(0);
+  const [mcData, setMcData] = useState<{ bin: string; count: number; cumPct: number }[]>([]);
 
   const sku = skuMaster.find(s => s.id === selectedSKU)!;
   const skuMaterials = bomTable.filter(b => b.skuId === selectedSKU).map(b => ({
@@ -60,6 +65,84 @@ const SimulationEngine = () => {
     }, 800);
   };
 
+  // Monte Carlo Simulation
+  const runMonteCarlo = useCallback(() => {
+    if (!costSim) return;
+    setMcRunning(true);
+    setMcIterations(0);
+    setMcData([]);
+
+    const totalCost = costSim.substitute.total;
+    const N = 5000;
+    const results: number[] = [];
+
+    // Simulate cost variations with normal distribution (Box-Muller)
+    for (let i = 0; i < N; i++) {
+      const u1 = Math.random();
+      const u2 = Math.random();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      // Material cost ±12%, freight ±18%, duty ±8%, packaging ±5%
+      const matVar = 1 + z * 0.12;
+      const z2 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const freightVar = 1 + z2 * 0.18;
+      const z3 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const dutyVar = 1 + z3 * 0.08;
+      const z4 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const pkgVar = 1 + z4 * 0.05;
+
+      const simCost =
+        costSim.substitute.formulation * matVar +
+        costSim.substitute.freight * freightVar +
+        costSim.substitute.duty * dutyVar +
+        costSim.substitute.packaging * pkgVar +
+        costSim.substitute.manufacturing +
+        costSim.substitute.warehouse;
+      results.push(simCost);
+    }
+
+    results.sort((a, b) => a - b);
+    const min = results[0];
+    const max = results[results.length - 1];
+    const bins = 30;
+    const binWidth = (max - min) / bins;
+    const histogram: { bin: string; count: number; cumPct: number }[] = [];
+    let cumulative = 0;
+
+    for (let i = 0; i < bins; i++) {
+      const lo = min + i * binWidth;
+      const hi = lo + binWidth;
+      const count = results.filter(r => r >= lo && r < hi).length;
+      cumulative += count;
+      histogram.push({
+        bin: `$${(lo / 1000).toFixed(0)}K`,
+        count,
+        cumPct: Math.round((cumulative / N) * 100),
+      });
+    }
+
+    // Animate iteration counter
+    let iter = 0;
+    const step = Math.ceil(N / 20);
+    const interval = setInterval(() => {
+      iter += step;
+      if (iter >= N) {
+        iter = N;
+        clearInterval(interval);
+        setMcRunning(false);
+        setMcData(histogram);
+      }
+      setMcIterations(iter);
+    }, 50);
+  }, [costSim]);
+
+  useEffect(() => {
+    if (monteCarloEnabled && simComplete && costSim) {
+      runMonteCarlo();
+    } else if (!monteCarloEnabled) {
+      setMcData([]);
+      setMcIterations(0);
+    }
+  }, [monteCarloEnabled, simComplete, costSim, runMonteCarlo]);
   const waterfallData = costSim ? [
     { name: "Formulation", value: -(costSim.original.formulation - costSim.substitute.formulation), fill: costSim.original.formulation > costSim.substitute.formulation ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Freight", value: -(costSim.original.freight - costSim.substitute.freight), fill: costSim.original.freight > costSim.substitute.freight ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
@@ -67,6 +150,16 @@ const SimulationEngine = () => {
     { name: "Packaging", value: -costSim.substitute.packaging, fill: "hsl(0, 72%, 51%)" },
     { name: "Warehouse", value: -(costSim.original.warehouse - costSim.substitute.warehouse), fill: costSim.original.warehouse > costSim.substitute.warehouse ? "hsl(160, 64%, 40%)" : "hsl(38, 92%, 50%)" },
   ] : [];
+
+  // Monte Carlo stats
+  const mcStats = useMemo(() => {
+    if (!mcData.length || !costSim) return null;
+    const totalCost = costSim.substitute.total;
+    const p5 = mcData.find(d => d.cumPct >= 5);
+    const p50 = mcData.find(d => d.cumPct >= 50);
+    const p95 = mcData.find(d => d.cumPct >= 95);
+    return { mean: totalCost, p5: p5?.bin || "", p50: p50?.bin || "", p95: p95?.bin || "" };
+  }, [mcData, costSim]);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -176,7 +269,7 @@ const SimulationEngine = () => {
 
       {/* Run Simulation */}
       {selectedSub && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center gap-6">
           <Button onClick={runSimulation} disabled={isSimulating} size="lg" className="gap-2 bg-primary hover:bg-primary/90">
             {isSimulating ? (
               <>
@@ -190,6 +283,13 @@ const SimulationEngine = () => {
               </>
             )}
           </Button>
+          <div className="flex items-center gap-2">
+            <Switch checked={monteCarloEnabled} onCheckedChange={setMonteCarloEnabled} />
+            <div className="flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Monte Carlo</span>
+            </div>
+          </div>
         </motion.div>
       )}
 
@@ -286,6 +386,86 @@ const SimulationEngine = () => {
                 )}
               </div>
             </div>
+
+            {/* Monte Carlo Risk Simulation */}
+            {monteCarloEnabled && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="kpi-card">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-semibold">Monte Carlo Risk Simulation</h3>
+                    <Badge variant="outline" className="text-[10px]">5,000 iterations</Badge>
+                  </div>
+                  {mcRunning && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      <span className="text-xs text-muted-foreground font-mono">{mcIterations.toLocaleString()} / 5,000</span>
+                    </div>
+                  )}
+                  {!mcRunning && mcData.length > 0 && (
+                    <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Complete</Badge>
+                  )}
+                </div>
+
+                {mcData.length > 0 ? (
+                  <div className="space-y-4">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <AreaChart data={mcData}>
+                        <defs>
+                          <linearGradient id="mcGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
+                        <XAxis dataKey="bin" tick={{ fontSize: 9 }} stroke="hsl(215, 16%, 47%)" interval={4} />
+                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" label={{ value: "Frequency", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "hsl(215, 16%, 47%)" } }} />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number, name: string) => [name === "count" ? `${v} simulations` : `${v}%`, name === "count" ? "Frequency" : "Cumulative %"]} />
+                        <Area type="monotone" dataKey="count" stroke="hsl(215, 70%, 50%)" fill="url(#mcGradient)" strokeWidth={2} />
+                        {costSim && (
+                          <ReferenceLine x={mcData[Math.floor(mcData.length / 2)]?.bin} stroke="hsl(38, 92%, 50%)" strokeDasharray="5 5" label={{ value: "P50", position: "top", style: { fontSize: 10, fill: "hsl(38, 92%, 50%)" } }} />
+                        )}
+                      </AreaChart>
+                    </ResponsiveContainer>
+
+                    {/* Stats row */}
+                    {mcStats && (
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P5 (Best Case)</p>
+                          <p className="text-sm font-bold text-accent mt-0.5">{mcStats.p5}</p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P50 (Median)</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">{mcStats.p50}</p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P95 (Worst Case)</p>
+                          <p className="text-sm font-bold text-destructive mt-0.5">{mcStats.p95}</p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Deterministic</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">{formatCurrency(costSim.substitute.total)}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground">Interpretation:</span> Based on 5,000 Monte Carlo iterations with stochastic variation across material costs (±12%), freight (±18%), duties (±8%), and packaging (±5%), the probability distribution shows the range of possible total landed costs. The P5–P95 band represents the 90% confidence interval for cost outcomes.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-40">
+                    <div className="text-center">
+                      <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">Running simulations...</p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
