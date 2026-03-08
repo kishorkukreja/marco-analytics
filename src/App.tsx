@@ -22,19 +22,23 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppLayout>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/simulation" element={<SimulationEngine />} />
-            <Route path="/optimization" element={<OptimizationEngine />} />
-            <Route path="/forecast" element={<ForecastIntelligence />} />
-            <Route path="/insights" element={<InsightsPage />} />
-            <Route path="/architecture" element={<ArchitecturePage />} />
-            <Route path="/admin" element={<AdminSettings />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AppLayout>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="*" element={
+            <AppLayout>
+              <Routes>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/simulation" element={<SimulationEngine />} />
+                <Route path="/optimization" element={<OptimizationEngine />} />
+                <Route path="/forecast" element={<ForecastIntelligence />} />
+                <Route path="/insights" element={<InsightsPage />} />
+                <Route path="/architecture" element={<ArchitecturePage />} />
+                <Route path="/admin" element={<AdminSettings />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </AppLayout>
+          } />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

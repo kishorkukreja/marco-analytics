@@ -24,7 +24,7 @@ const LandingPage = () => {
   const revGrowth = +((latestTrend.revenue - prevTrend.revenue) / prevTrend.revenue * 100).toFixed(1);
 
   return (
-    <div className="min-h-[calc(100vh-64px)] flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.03]" style={{
