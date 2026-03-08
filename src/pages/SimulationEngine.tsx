@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FlaskConical, ArrowRight, AlertTriangle, CheckCircle2, Info, Zap } from "lucide-react";
+import { FlaskConical, ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { skuMaster, materialMaster, bomTable, supplierMaster, calculateSimilarity, calculateRiskScore, simulateLandedCost } from "@/data/mockData";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, ReferenceLine } from "recharts";
 
 const SimulationEngine = () => {
   const [selectedSKU, setSelectedSKU] = useState(skuMaster[0].id);
