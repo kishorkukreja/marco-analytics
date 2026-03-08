@@ -185,22 +185,22 @@ const Dashboard = () => {
                 {/* Header row */}
                 <button
                   onClick={() => setExpandedSKU(isExpanded ? null : sku.id)}
-                  className="w-full flex items-center justify-between p-3 text-left"
+                  className="w-full flex items-center justify-between p-2 sm:p-3 text-left"
                 >
-                  <div className="flex items-center gap-3">
-                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
-                    <div>
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold">{sku.id}</span>
-                        <span className="text-xs text-muted-foreground">{sku.name}</span>
+                        <span className="text-xs text-muted-foreground truncate hidden sm:inline">{sku.name}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground">{sku.brand} • {sku.category} • {sku.region}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{sku.brand} • {sku.category} • {sku.region}</span>
                       </div>
                     </div>
                   </div>
-                    <div className="flex items-center gap-4">
-                    <div className="text-right">
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                    <div className="text-right hidden sm:block">
                       <p className="text-xs text-muted-foreground">Revenue</p>
                       <p className="text-xs font-semibold">${(sku.revenue / 1e6).toFixed(1)}M</p>
                     </div>
@@ -210,11 +210,11 @@ const Dashboard = () => {
                         {sku.currentMargin}%
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right hidden md:block">
                       <p className="text-xs text-muted-foreground">Volume</p>
                       <p className="text-xs font-semibold">{(sku.annualVolume / 1e6).toFixed(1)}M</p>
                     </div>
-                    <div className="w-16 text-center">
+                    <div className="w-14 sm:w-16 text-center">
                       {hasHighAlert ? (
                         <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[9px]">{skuAlertCount} Alert{skuAlertCount > 1 ? "s" : ""}</Badge>
                       ) : skuAlertCount > 0 ? (
@@ -223,7 +223,7 @@ const Dashboard = () => {
                         <Badge variant="outline" className="text-[9px] text-accent border-accent/30">Healthy</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 ml-2" onClick={e => e.stopPropagation()}>
+                    <div className="items-center gap-1 ml-1 sm:ml-2 hidden sm:flex" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => setNarrativeSKU(narrativeSKU === sku.id ? null : sku.id)}
                         className={`p-1.5 rounded-md transition-colors ${narrativeSKU === sku.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
@@ -233,7 +233,6 @@ const Dashboard = () => {
                       </button>
                       <button
                         onClick={() => {
-                          // Find matching scenario trigger for this SKU
                           const alertForSku = skuAlerts.find(a => a.skuId === sku.id);
                           const triggerMap: Record<string, string> = {
                             cost_spike: "SCN-001",
