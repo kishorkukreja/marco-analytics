@@ -269,7 +269,7 @@ const SimulationEngine = () => {
 
       {/* Run Simulation */}
       {selectedSub && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center gap-6">
           <Button onClick={runSimulation} disabled={isSimulating} size="lg" className="gap-2 bg-primary hover:bg-primary/90">
             {isSimulating ? (
               <>
@@ -283,6 +283,13 @@ const SimulationEngine = () => {
               </>
             )}
           </Button>
+          <div className="flex items-center gap-2">
+            <Switch checked={monteCarloEnabled} onCheckedChange={setMonteCarloEnabled} />
+            <div className="flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Monte Carlo</span>
+            </div>
+          </div>
         </motion.div>
       )}
 
