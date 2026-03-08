@@ -65,7 +65,84 @@ const SimulationEngine = () => {
     }, 800);
   };
 
-  const waterfallData = costSim ? [
+  // Monte Carlo Simulation
+  const runMonteCarlo = useCallback(() => {
+    if (!costSim) return;
+    setMcRunning(true);
+    setMcIterations(0);
+    setMcData([]);
+
+    const totalCost = costSim.substitute.total;
+    const N = 5000;
+    const results: number[] = [];
+
+    // Simulate cost variations with normal distribution (Box-Muller)
+    for (let i = 0; i < N; i++) {
+      const u1 = Math.random();
+      const u2 = Math.random();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      // Material cost ±12%, freight ±18%, duty ±8%, packaging ±5%
+      const matVar = 1 + z * 0.12;
+      const z2 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const freightVar = 1 + z2 * 0.18;
+      const z3 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const dutyVar = 1 + z3 * 0.08;
+      const z4 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      const pkgVar = 1 + z4 * 0.05;
+
+      const simCost =
+        costSim.substitute.formulation * matVar +
+        costSim.substitute.freight * freightVar +
+        costSim.substitute.duty * dutyVar +
+        costSim.substitute.packaging * pkgVar +
+        costSim.substitute.manufacturing +
+        costSim.substitute.warehouse;
+      results.push(simCost);
+    }
+
+    results.sort((a, b) => a - b);
+    const min = results[0];
+    const max = results[results.length - 1];
+    const bins = 30;
+    const binWidth = (max - min) / bins;
+    const histogram: { bin: string; count: number; cumPct: number }[] = [];
+    let cumulative = 0;
+
+    for (let i = 0; i < bins; i++) {
+      const lo = min + i * binWidth;
+      const hi = lo + binWidth;
+      const count = results.filter(r => r >= lo && r < hi).length;
+      cumulative += count;
+      histogram.push({
+        bin: `$${(lo / 1000).toFixed(0)}K`,
+        count,
+        cumPct: Math.round((cumulative / N) * 100),
+      });
+    }
+
+    // Animate iteration counter
+    let iter = 0;
+    const step = Math.ceil(N / 20);
+    const interval = setInterval(() => {
+      iter += step;
+      if (iter >= N) {
+        iter = N;
+        clearInterval(interval);
+        setMcRunning(false);
+        setMcData(histogram);
+      }
+      setMcIterations(iter);
+    }, 50);
+  }, [costSim]);
+
+  useEffect(() => {
+    if (monteCarloEnabled && simComplete && costSim) {
+      runMonteCarlo();
+    } else if (!monteCarloEnabled) {
+      setMcData([]);
+      setMcIterations(0);
+    }
+  }, [monteCarloEnabled, simComplete, costSim, runMonteCarlo]);
     { name: "Formulation", value: -(costSim.original.formulation - costSim.substitute.formulation), fill: costSim.original.formulation > costSim.substitute.formulation ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Freight", value: -(costSim.original.freight - costSim.substitute.freight), fill: costSim.original.freight > costSim.substitute.freight ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Duty", value: -(costSim.original.duty - costSim.substitute.duty), fill: costSim.original.duty > costSim.substitute.duty ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
