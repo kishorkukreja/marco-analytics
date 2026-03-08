@@ -245,15 +245,17 @@ export const dashboardKPIs = {
 
 // ========== TREND DATA (12 months) ==========
 export const trendData = months12.map((month, i) => {
-  const baseCost = 68 + Math.sin(i * 0.4) * 4 + i * 0.3;
   const baseRev = 8.2 + Math.sin(i * 0.6) * 1.5 + i * 0.25;
+  const costRatio = 0.65 + Math.sin(i * 0.4) * 0.03 + (Math.random() - 0.5) * 0.02;
+  const totalCost = +(baseRev * costRatio).toFixed(2);
+  const margin = +(((baseRev - totalCost) / baseRev) * 100).toFixed(1);
   return {
     month,
-    totalCost: +baseCost.toFixed(1),
-    revenue: +baseRev.toFixed(1),
-    margin: +(((baseRev - baseCost / 10) / baseRev) * 100).toFixed(1),
-    lyRevenue: +(baseRev * 0.92).toFixed(1),
-    lyCost: +(baseCost * 0.95).toFixed(1),
+    totalCost,
+    revenue: +baseRev.toFixed(2),
+    margin,
+    lyRevenue: +(baseRev * 0.92).toFixed(2),
+    lyCost: +(totalCost * 0.95).toFixed(2),
   };
 });
 
@@ -263,6 +265,38 @@ export const savingsByCategory = [
   { category: "Dishwash", realized: 340000, potential: 520000 },
   { category: "Personal Care", realized: 620000, potential: 780000 },
   { category: "Home Care", realized: 490000, potential: 640000 },
+];
+
+// ========== COST OVER TIME BY CATEGORY ==========
+export const costOverTime = months12.map((month, i) => ({
+  month,
+  Laundry: +(3.2 + Math.sin(i * 0.5) * 0.4 + i * 0.08).toFixed(2),
+  Dishwash: +(1.8 + Math.sin(i * 0.4) * 0.25 + i * 0.05).toFixed(2),
+  "Personal Care": +(2.4 + Math.sin(i * 0.6) * 0.3 + i * 0.06).toFixed(2),
+  "Home Care": +(1.5 + Math.sin(i * 0.3) * 0.2 + i * 0.04).toFixed(2),
+}));
+
+// ========== SERVICE LEVEL BY CATEGORY ==========
+export const serviceLevelData = [
+  { category: "Laundry", fillRate: 96.2, onTimeDelivery: 94.1, stockoutDays: 3, forecastAccuracy: 92.5 },
+  { category: "Dishwash", fillRate: 93.8, onTimeDelivery: 91.5, stockoutDays: 7, forecastAccuracy: 88.2 },
+  { category: "Personal Care", fillRate: 97.5, onTimeDelivery: 96.3, stockoutDays: 1, forecastAccuracy: 94.8 },
+  { category: "Home Care", fillRate: 91.4, onTimeDelivery: 89.7, stockoutDays: 9, forecastAccuracy: 86.1 },
+];
+
+// ========== MARGIN BY CHANNEL ==========
+export const marginByChannel = [
+  { channel: "Retail", avgMargin: 33.2, revenue: 58000000, skuCount: 5 },
+  { channel: "E-Commerce", avgMargin: 36.8, revenue: 20100000, skuCount: 2 },
+  { channel: "Wholesale", avgMargin: 22.8, revenue: 5400000, skuCount: 1 },
+];
+
+// ========== COST BY REGION ==========
+export const costByRegion = [
+  { region: "EMEA", materialCost: 4.2, freightCost: 0.9, dutyCost: 0.3, totalCost: 5.4 },
+  { region: "APAC", materialCost: 3.1, freightCost: 1.2, dutyCost: 0.5, totalCost: 4.8 },
+  { region: "NA", materialCost: 3.8, freightCost: 0.6, dutyCost: 0.2, totalCost: 4.6 },
+  { region: "LATAM", materialCost: 2.9, freightCost: 1.4, dutyCost: 0.6, totalCost: 4.9 },
 ];
 
 // ========== SKU ALERTS ==========
