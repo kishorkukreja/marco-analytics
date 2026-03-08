@@ -253,6 +253,25 @@ const Dashboard = () => {
                       className="overflow-hidden"
                     >
                       <div className="px-4 pb-4 pt-1 border-t border-border/30">
+                        {/* Narrative Panel */}
+                        <AnimatePresence>
+                          {narrativeSKU === sku.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="mb-3 mt-2 rounded-lg bg-primary/[0.03] border border-primary/20 p-3 space-y-2"
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <BookOpen className="h-3.5 w-3.5 text-primary" />
+                                <p className="text-[11px] font-semibold text-primary">SKU Narrative</p>
+                              </div>
+                              {generateNarrative(sku.id).map((line, i) => (
+                                <p key={i} className="text-[11px] text-foreground/80 leading-relaxed">{line}</p>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
                           {/* Alerts */}
                           <div>
