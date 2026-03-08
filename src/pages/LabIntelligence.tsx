@@ -238,6 +238,9 @@ export default function LabIntelligence() {
               rdResults={rdResults}
               recipeCost={recipeCost}
               rdCost={rdCost}
+              category={category}
+              rdBom={rdBom}
+              recipeBom={recipeBom}
             />
           </CardContent>
         </Card>
