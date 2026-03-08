@@ -74,6 +74,47 @@ const statusIcon = {
   rejected: <AlertTriangle className="h-3 w-3 text-destructive" />,
 };
 
+function generateNarrative(skuId: string) {
+  const sku = skuMaster.find(s => s.id === skuId)!;
+  const alerts = skuAlerts.filter(a => a.skuId === skuId);
+  const materials = bomTable.filter(b => b.skuId === skuId).map(b => {
+    const mat = materialMaster.find(m => m.id === b.materialId)!;
+    return { ...mat, pct: b.compositionPct };
+  });
+
+  const lines: string[] = [];
+  lines.push(`${sku.name} generates $${(sku.revenue / 1e6).toFixed(1)}M in annual revenue at a ${sku.currentMargin}% gross margin, with ${(sku.annualVolume / 1e6).toFixed(1)}M units across the ${sku.region} ${sku.channel} channel.`);
+
+  if (materials.length > 0) {
+    const topMat = materials.sort((a, b) => b.pct - a.pct)[0];
+    lines.push(`The primary raw material is ${topMat.name} (${topMat.pct}% composition) at $${topMat.costPerKg}/kg sourced from ${topMat.supplierId}.`);
+  }
+
+  const highAlerts = alerts.filter(a => a.severity === "high");
+  const medAlerts = alerts.filter(a => a.severity === "medium");
+  if (highAlerts.length > 0) {
+    lines.push(`⚠️ Critical: ${highAlerts.map(a => a.title).join("; ")}. Combined impact: ${highAlerts.map(a => a.impact).join(", ")}.`);
+  }
+  if (medAlerts.length > 0) {
+    lines.push(`Monitoring: ${medAlerts.map(a => a.title).join("; ")}.`);
+  }
+
+  const subOpps = alerts.filter(a => a.type === "substitution_opportunity");
+  if (subOpps.length > 0) {
+    lines.push(`💡 Opportunity: ${subOpps.map(a => a.description).join(" ")} Potential impact: ${subOpps.map(a => a.impact).join(", ")}.`);
+  }
+
+  if (sku.currentMargin < 25) {
+    lines.push(`Recommendation: Margin is below the 25% threshold — prioritize cost optimization or pricing review immediately.`);
+  } else if (sku.currentMargin < 30) {
+    lines.push(`Recommendation: Margin is trending toward threshold. Run simulation to identify substitution or sourcing levers.`);
+  } else {
+    lines.push(`Status: SKU is performing within healthy margin targets. Continue monitoring for cost volatility.`);
+  }
+
+  return lines;
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
