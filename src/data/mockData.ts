@@ -128,7 +128,7 @@ export const historicalCosts: CostRecord[] = materialMaster.flatMap(mat =>
 
 // ========== FORECAST DATA (24 months) ==========
 const months24 = [
-  "Jan'23","Feb'23","Mar'23","Apr'23","May'23","Jun'23","Jul'23","Aug'23","Sep'23","Oct'23","Nov'23","Dec'23",
+  "Jan'24","Feb'24","Mar'24","Apr'24","May'24","Jun'24","Jul'24","Aug'24","Sep'24","Oct'24","Nov'24","Dec'24",
   ...months12,
 ];
 
