@@ -81,7 +81,7 @@ const LandingPage = () => {
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden">
 
-        <div className="relative max-w-[1400px] mx-auto px-6 pt-8 pb-12">
+        <div className="relative max-w-[1400px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-8 sm:pb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
