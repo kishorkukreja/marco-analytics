@@ -166,7 +166,7 @@ const LandingPage = () => {
       </section>
 
       {/* ===== MODULE CARDS ===== */}
-      <section className="max-w-[1400px] mx-auto px-6 pb-12 flex-1">
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 pb-8 sm:pb-12 flex-1">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
