@@ -20,6 +20,7 @@ const navItems = [
   { title: "Simulation Engine", url: "/simulation", icon: FlaskConical },
   { title: "Optimization Engine", url: "/optimization", icon: Cpu },
   { title: "Forecast Intelligence", url: "/forecast", icon: BrainCircuit },
+  { title: "Lab Intelligence", url: "/lab", icon: Microscope },
 ];
 
 export function AppSidebar() {

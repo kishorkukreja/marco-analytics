@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import SimulationEngine from "./pages/SimulationEngine";
 import OptimizationEngine from "./pages/OptimizationEngine";
 import ForecastIntelligence from "./pages/ForecastIntelligence";
+import LabIntelligence from "./pages/LabIntelligence";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -29,6 +30,7 @@ const App = () => (
                 <Route path="/simulation" element={<SimulationEngine />} />
                 <Route path="/optimization" element={<OptimizationEngine />} />
                 <Route path="/forecast" element={<ForecastIntelligence />} />
+                <Route path="/lab" element={<LabIntelligence />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
