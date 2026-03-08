@@ -386,6 +386,86 @@ const SimulationEngine = () => {
                 )}
               </div>
             </div>
+
+            {/* Monte Carlo Risk Simulation */}
+            {monteCarloEnabled && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="kpi-card">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-semibold">Monte Carlo Risk Simulation</h3>
+                    <Badge variant="outline" className="text-[10px]">5,000 iterations</Badge>
+                  </div>
+                  {mcRunning && (
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      <span className="text-xs text-muted-foreground font-mono">{mcIterations.toLocaleString()} / 5,000</span>
+                    </div>
+                  )}
+                  {!mcRunning && mcData.length > 0 && (
+                    <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Complete</Badge>
+                  )}
+                </div>
+
+                {mcData.length > 0 ? (
+                  <div className="space-y-4">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <AreaChart data={mcData}>
+                        <defs>
+                          <linearGradient id="mcGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
+                        <XAxis dataKey="bin" tick={{ fontSize: 9 }} stroke="hsl(215, 16%, 47%)" interval={4} />
+                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" label={{ value: "Frequency", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "hsl(215, 16%, 47%)" } }} />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number, name: string) => [name === "count" ? `${v} simulations` : `${v}%`, name === "count" ? "Frequency" : "Cumulative %"]} />
+                        <Area type="monotone" dataKey="count" stroke="hsl(215, 70%, 50%)" fill="url(#mcGradient)" strokeWidth={2} />
+                        {costSim && (
+                          <ReferenceLine x={mcData[Math.floor(mcData.length / 2)]?.bin} stroke="hsl(38, 92%, 50%)" strokeDasharray="5 5" label={{ value: "P50", position: "top", style: { fontSize: 10, fill: "hsl(38, 92%, 50%)" } }} />
+                        )}
+                      </AreaChart>
+                    </ResponsiveContainer>
+
+                    {/* Stats row */}
+                    {mcStats && (
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P5 (Best Case)</p>
+                          <p className="text-sm font-bold text-accent mt-0.5">{mcStats.p5}</p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P50 (Median)</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">{mcStats.p50}</p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P95 (Worst Case)</p>
+                          <p className="text-sm font-bold text-destructive mt-0.5">{mcStats.p95}</p>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Deterministic</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">{formatCurrency(costSim.substitute.total)}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        <span className="font-semibold text-foreground">Interpretation:</span> Based on 5,000 Monte Carlo iterations with stochastic variation across material costs (±12%), freight (±18%), duties (±8%), and packaging (±5%), the probability distribution shows the range of possible total landed costs. The P5–P95 band represents the 90% confidence interval for cost outcomes.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-40">
+                    <div className="text-center">
+                      <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground">Running simulations...</p>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
