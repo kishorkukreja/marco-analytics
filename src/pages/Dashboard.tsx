@@ -139,19 +139,19 @@ const Dashboard = () => {
   }, [filters.category]);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-[1400px] mx-auto">
       {/* Header + Filters */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-        <div className="flex items-end justify-between">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Executive Summary</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Executive Summary</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Portfolio overview across {filteredKPIs.skuCount} SKU{filteredKPIs.skuCount !== 1 ? "s" : ""} • Real-time insights
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">Last updated: 2 min ago</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground">Last updated: 2 min ago</p>
         </div>
-        <div className="kpi-card !p-3">
+        <div className="kpi-card !p-2 sm:!p-3">
           <GlobalFilters filters={filters} onChange={setFilters} />
         </div>
       </motion.div>
