@@ -98,7 +98,7 @@ const LandingPage = () => {
               </div>
             </div>
 
-            <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground leading-[1.1] mb-4">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground leading-[1.1] mb-4">
               Intelligent Margin
               <br />
               <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -106,12 +106,12 @@ const LandingPage = () => {
               </span>
             </h1>
 
-            <p className="text-base text-muted-foreground leading-relaxed max-w-lg mb-8">
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-lg mb-6 sm:mb-8">
               End-to-end visibility across formulation costs, supply chain logistics, and demand signals — 
               powered by scenario simulation and predictive intelligence to protect and grow margins.
             </p>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
               <Button size="lg" className="gap-2 bg-primary hover:bg-primary/90" onClick={() => navigate("/dashboard")}>
                 <BarChart3 className="h-4 w-4" />
                 Open Dashboard
