@@ -232,7 +232,18 @@ const Dashboard = () => {
                         <BookOpen className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => navigate(`/simulation?sku=${sku.id}`)}
+                        onClick={() => {
+                          // Find matching scenario trigger for this SKU
+                          const alertForSku = skuAlerts.find(a => a.skuId === sku.id);
+                          const triggerMap: Record<string, string> = {
+                            cost_spike: "SCN-001",
+                            margin_erosion: "SCN-005",
+                            forecast_deviation: "SCN-007",
+                            substitution_opportunity: "",
+                          };
+                          const triggerId = alertForSku ? triggerMap[alertForSku.type] || "" : "";
+                          navigate(`/simulation?sku=${sku.id}${triggerId ? `&trigger=${triggerId}` : ""}`);
+                        }}
                         className="p-1.5 rounded-md hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
                         title="Run simulation"
                       >
