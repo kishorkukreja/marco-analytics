@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { FlaskConical, Play, Save, RotateCcw, Beaker } from "lucide-react";
+import { FlaskConical, Play, Save, RotateCcw, Beaker, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { RecipeBOM } from "@/components/lab/RecipeBOM";
 import { RnDBOM } from "@/components/lab/RnDBOM";
 import { SimulationResults } from "@/components/lab/SimulationResults";
 import { ExperimentHistory } from "@/components/lab/ExperimentHistory";
+import { SubstitutionRecommender } from "@/components/lab/SubstitutionRecommender";
 import {
   skuMaster,
   getRecipeBOM,
@@ -28,7 +30,7 @@ function loadExperiments(): SavedExperiment[] {
   } catch { return []; }
 }
 
-function saveExperiments(exps: SavedExperiment[]) {
+function saveExperimentsToStorage(exps: SavedExperiment[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(exps));
 }
 
@@ -38,6 +40,7 @@ export default function LabIntelligence() {
   const [rdBom, setRdBom] = useState<LabBOMEntry[]>([]);
   const [simRan, setSimRan] = useState(false);
   const [expName, setExpName] = useState("");
+  const [expNotes, setExpNotes] = useState("");
   const [experiments, setExperiments] = useState<SavedExperiment[]>(loadExperiments);
 
   const sku = skuMaster.find(s => s.id === selectedSku)!;
@@ -74,16 +77,24 @@ export default function LabIntelligence() {
       results: rdResults,
       recipeCost,
       rdCost,
-      notes: "",
+      notes: expNotes.trim(),
     };
     const updated = [exp, ...experiments];
     setExperiments(updated);
-    saveExperiments(updated);
+    saveExperimentsToStorage(updated);
     setExpName("");
+    setExpNotes("");
+  };
+
+  const updateExperimentNotes = (id: string, notes: string) => {
+    const updated = experiments.map(e => e.id === id ? { ...e, notes } : e);
+    setExperiments(updated);
+    saveExperimentsToStorage(updated);
   };
 
   const loadExperiment = (exp: SavedExperiment) => {
     setSelectedSku(exp.skuId);
+    setExpNotes(exp.notes || "");
     setTimeout(() => {
       setRdBom(exp.rdBom.map(e => ({ ...e })));
       setSimRan(true);
@@ -93,7 +104,15 @@ export default function LabIntelligence() {
   const deleteExperiment = (id: string) => {
     const updated = experiments.filter(e => e.id !== id);
     setExperiments(updated);
-    saveExperiments(updated);
+    saveExperimentsToStorage(updated);
+  };
+
+  const applySubstitution = (originalId: string, substituteId: string) => {
+    const updated = rdBom.map(e =>
+      e.materialId === originalId ? { ...e, materialId: substituteId } : e
+    );
+    setRdBom(updated);
+    setSimRan(false);
   };
 
   return (
@@ -142,6 +161,20 @@ export default function LabIntelligence() {
         </CardContent>
       </Card>
 
+      {/* Substitution Recommender */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Lightbulb className="h-4 w-4 text-warning" />
+            Substitution Recommendations
+          </CardTitle>
+          <p className="text-[10px] text-muted-foreground">AI-ranked alternatives based on similarity scores, cost savings, and supplier reliability</p>
+        </CardHeader>
+        <CardContent>
+          <SubstitutionRecommender recipeBom={recipeBom} onApply={applySubstitution} />
+        </CardContent>
+      </Card>
+
       {/* Two-Panel BOM View */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
@@ -157,26 +190,36 @@ export default function LabIntelligence() {
       </div>
 
       {/* Simulation Controls */}
-      <div className="flex items-center gap-3">
-        <Button onClick={runSimulation} disabled={totalRdPct > 100} className="gap-2">
-          <Play className="h-4 w-4" />
-          Run Simulation
-        </Button>
-        <Button variant="outline" onClick={resetRdBom} className="gap-2">
-          <RotateCcw className="h-4 w-4" />
-          Reset to Recipe
-        </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <Input
-            placeholder="Experiment name..."
-            value={expName}
-            onChange={(e) => setExpName(e.target.value)}
-            className="h-9 w-48 text-xs"
-          />
-          <Button variant="secondary" onClick={saveExperiment} disabled={!simRan || !expName.trim()} className="gap-2">
-            <Save className="h-4 w-4" />
-            Save
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex items-center gap-3">
+          <Button onClick={runSimulation} disabled={totalRdPct > 100} className="gap-2">
+            <Play className="h-4 w-4" />
+            Run Simulation
           </Button>
+          <Button variant="outline" onClick={resetRdBom} className="gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Reset to Recipe
+          </Button>
+        </div>
+        <div className="ml-auto flex flex-col gap-2 items-end">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Experiment name..."
+              value={expName}
+              onChange={(e) => setExpName(e.target.value)}
+              className="h-9 w-48 text-xs"
+            />
+            <Button variant="secondary" onClick={saveExperiment} disabled={!simRan || !expName.trim()} className="gap-2">
+              <Save className="h-4 w-4" />
+              Save
+            </Button>
+          </div>
+          <Textarea
+            placeholder="Hypothesis, observations, notes..."
+            value={expNotes}
+            onChange={(e) => setExpNotes(e.target.value)}
+            className="w-full min-w-[320px] text-xs h-16 resize-none"
+          />
         </div>
       </div>
 
@@ -210,6 +253,7 @@ export default function LabIntelligence() {
             experiments={experiments}
             onLoad={loadExperiment}
             onDelete={deleteExperiment}
+            onUpdateNotes={updateExperimentNotes}
           />
         </CardContent>
       </Card>

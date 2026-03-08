@@ -2,18 +2,20 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Download, GitCompare } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Trash2, Download, GitCompare, StickyNote, ChevronDown, ChevronUp } from "lucide-react";
 import { skuMaster, type SavedExperiment } from "@/data/mockData";
-import { SimulationResults } from "./SimulationResults";
 
 interface ExperimentHistoryProps {
   experiments: SavedExperiment[];
   onLoad: (exp: SavedExperiment) => void;
   onDelete: (id: string) => void;
+  onUpdateNotes: (id: string, notes: string) => void;
 }
 
-export function ExperimentHistory({ experiments, onLoad, onDelete }: ExperimentHistoryProps) {
+export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes }: ExperimentHistoryProps) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [expandedNotes, setExpandedNotes] = useState<string | null>(null);
 
   const toggleCompare = (id: string) => {
     setCompareIds(prev =>
@@ -50,6 +52,7 @@ export function ExperimentHistory({ experiments, onLoad, onDelete }: ExperimentH
             <TableHead className="text-[10px]">Date</TableHead>
             <TableHead className="text-[10px]">Cost Δ</TableHead>
             <TableHead className="text-[10px]">Quality</TableHead>
+            <TableHead className="text-[10px]">Notes</TableHead>
             <TableHead className="text-[10px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -58,38 +61,69 @@ export function ExperimentHistory({ experiments, onLoad, onDelete }: ExperimentH
             const sku = skuMaster.find(s => s.id === exp.skuId);
             const costDelta = exp.rdCost - exp.recipeCost;
             const isSelected = compareIds.includes(exp.id);
+            const isExpanded = expandedNotes === exp.id;
             return (
-              <TableRow key={exp.id} className={isSelected ? "bg-primary/5" : ""}>
-                <TableCell>
-                  <button
-                    onClick={() => toggleCompare(exp.id)}
-                    className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${isSelected ? "bg-primary border-primary" : "border-border hover:border-primary"}`}
-                  >
-                    {isSelected && <GitCompare className="h-3 w-3 text-primary-foreground" />}
-                  </button>
-                </TableCell>
-                <TableCell className="text-xs font-medium">{exp.name}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{sku?.name || exp.skuId}</TableCell>
-                <TableCell className="text-[10px] text-muted-foreground font-mono">{exp.date}</TableCell>
-                <TableCell>
-                  <span className={`text-xs font-mono ${costDelta <= 0 ? "text-accent" : "text-destructive"}`}>
-                    {costDelta <= 0 ? "" : "+"}{costDelta.toFixed(3)}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Badge className={`text-[9px] ${verdictStyle[exp.results.verdict]}`}>{exp.results.verdict}</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onLoad(exp)}>
-                      <Download className="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDelete(exp.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
+              <>
+                <TableRow key={exp.id} className={isSelected ? "bg-primary/5" : ""}>
+                  <TableCell>
+                    <button
+                      onClick={() => toggleCompare(exp.id)}
+                      className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${isSelected ? "bg-primary border-primary" : "border-border hover:border-primary"}`}
+                    >
+                      {isSelected && <GitCompare className="h-3 w-3 text-primary-foreground" />}
+                    </button>
+                  </TableCell>
+                  <TableCell className="text-xs font-medium">{exp.name}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{sku?.name || exp.skuId}</TableCell>
+                  <TableCell className="text-[10px] text-muted-foreground font-mono">{exp.date}</TableCell>
+                  <TableCell>
+                    <span className={`text-xs font-mono ${costDelta <= 0 ? "text-accent" : "text-destructive"}`}>
+                      {costDelta <= 0 ? "" : "+"}{costDelta.toFixed(3)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={`text-[9px] ${verdictStyle[exp.results.verdict]}`}>{exp.results.verdict}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => setExpandedNotes(isExpanded ? null : exp.id)}
+                      className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <StickyNote className="h-3 w-3" />
+                      {exp.notes ? (
+                        <span className="text-[10px] text-foreground max-w-[100px] truncate">{exp.notes}</span>
+                      ) : (
+                        <span className="text-[10px]">Add</span>
+                      )}
+                      {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onLoad(exp)}>
+                        <Download className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDelete(exp.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {isExpanded && (
+                  <TableRow key={`${exp.id}-notes`}>
+                    <TableCell colSpan={8} className="pt-0 pb-3">
+                      <div className="pl-8">
+                        <Textarea
+                          placeholder="Document your hypothesis, observations, or conclusions..."
+                          value={exp.notes}
+                          onChange={(e) => onUpdateNotes(exp.id, e.target.value)}
+                          className="text-xs h-20 resize-none"
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             );
           })}
         </TableBody>
@@ -124,6 +158,12 @@ export function ExperimentHistory({ experiments, onLoad, onDelete }: ExperimentH
                     <Badge className={`text-[9px] ${verdictStyle[exp.results.verdict]}`}>{exp.results.verdict}</Badge>
                   </div>
                 </div>
+                {exp.notes && (
+                  <div className="mt-3 pt-2 border-t">
+                    <p className="text-[9px] text-muted-foreground uppercase mb-1">Notes</p>
+                    <p className="text-[10px] text-foreground whitespace-pre-wrap">{exp.notes}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
