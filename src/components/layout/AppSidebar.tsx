@@ -1,4 +1,4 @@
-import { BarChart3, Cpu, FlaskConical, BrainCircuit, Lightbulb, Server, Settings, ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { BarChart3, Cpu, FlaskConical, BrainCircuit, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -20,9 +20,6 @@ const navItems = [
   { title: "Simulation Engine", url: "/simulation", icon: FlaskConical },
   { title: "Optimization Engine", url: "/optimization", icon: Cpu },
   { title: "Forecast Intelligence", url: "/forecast", icon: BrainCircuit },
-  { title: "Insights & Value", url: "/insights", icon: Lightbulb },
-  { title: "System Architecture", url: "/architecture", icon: Server },
-  { title: "Admin Settings", url: "/admin", icon: Settings },
 ];
 
 export function AppSidebar() {

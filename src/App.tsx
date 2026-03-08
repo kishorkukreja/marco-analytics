@@ -9,9 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import SimulationEngine from "./pages/SimulationEngine";
 import OptimizationEngine from "./pages/OptimizationEngine";
 import ForecastIntelligence from "./pages/ForecastIntelligence";
-import InsightsPage from "./pages/InsightsPage";
-import ArchitecturePage from "./pages/ArchitecturePage";
-import AdminSettings from "./pages/AdminSettings";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,9 +29,7 @@ const App = () => (
                 <Route path="/simulation" element={<SimulationEngine />} />
                 <Route path="/optimization" element={<OptimizationEngine />} />
                 <Route path="/forecast" element={<ForecastIntelligence />} />
-                <Route path="/insights" element={<InsightsPage />} />
-                <Route path="/architecture" element={<ArchitecturePage />} />
-                <Route path="/admin" element={<AdminSettings />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AppLayout>
