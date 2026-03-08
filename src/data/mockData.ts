@@ -784,17 +784,40 @@ export function simulateFormulation(bomEntries: LabBOMEntry[], category: string)
   });
 
   // Foam index: surfactant performance weighted, scaled to 0-100
-  const foamIndex = Math.min(100, foamNumerator * 3 + 20);
+  const surfactantPct = bomEntries.reduce((s, e) => {
+    const mat = materialMaster.find(m => m.id === e.materialId);
+    return s + (mat?.type === "Surfactant" ? e.compositionPct : 0);
+  }, 0);
+  const foamIndex = Math.min(100, foamNumerator * 3 + surfactantPct * 1.5 + 15);
 
-  // Texture score: function of viscosity and humectant
-  const viscNorm = Math.min(1, viscosity / 500);
+  // Texture score: category-aware normalization
+  // Laundry/Home Care = low viscosity expected; Personal Care/Dishwash = higher viscosity
+  const viscosityRanges: Record<string, [number, number]> = {
+    Laundry: [5, 80],
+    Dishwash: [10, 70],
+    "Personal Care": [50, 800],
+    "Home Care": [5, 60],
+  };
+  const [viscLo, viscHi] = viscosityRanges[category] || [5, 500];
+  const viscNorm = Math.min(1, Math.max(0, (viscosity - viscLo * 0.5) / (viscHi - viscLo * 0.5)));
   const humNorm = Math.min(1, humectantPct / 20);
-  const textureScore = Math.min(100, (viscNorm * 50 + humNorm * 40 + 10));
+  const builderPct = bomEntries.reduce((s, e) => {
+    const mat = materialMaster.find(m => m.id === e.materialId);
+    return s + (mat?.type === "Builder" ? e.compositionPct : 0);
+  }, 0);
+  const builderNorm = Math.min(1, builderPct / 25);
+  // For laundry/home care, builders and surfactants matter more than viscosity for texture
+  const isLowVisc = category === "Laundry" || category === "Home Care";
+  const textureScore = isLowVisc
+    ? Math.min(100, viscNorm * 25 + surfactantPct * 1.2 + builderNorm * 30 + humNorm * 15 + 15)
+    : Math.min(100, viscNorm * 50 + humNorm * 40 + 10);
 
-  // Consistency: composite of density stability and pH balance
+  // Consistency: composite of density stability, pH balance, and formulation completeness
   const densityScore = density >= 1.0 && density <= 1.5 ? 90 : density > 1.5 ? 70 : 60;
-  const pHScore = pH >= 5 && pH <= 10 ? 90 : 65;
-  const consistencyRating = Math.min(100, (densityScore * 0.5 + pHScore * 0.3 + foamIndex * 0.2));
+  const pHThresh = categoryThresholds[category]?.pH || [5, 10];
+  const pHScore = pH >= pHThresh[0] && pH <= pHThresh[1] ? 92 : pH >= pHThresh[0] - 1 && pH <= pHThresh[1] + 1 ? 78 : 60;
+  const completenessScore = Math.min(95, totalPct * 1.2 + 30);
+  const consistencyRating = Math.min(100, (densityScore * 0.35 + pHScore * 0.3 + foamIndex * 0.15 + completenessScore * 0.2));
 
   const properties: SimulatedProperties = {
     pH: +pH.toFixed(2),
