@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Target, AlertCircle, Lightbulb, BarChart3, ChevronDown, ArrowRight, CheckCircle2, Clock } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Target, AlertCircle, Lightbulb, BarChart3, ChevronDown, ArrowRight, CheckCircle2, Clock, BookOpen, FlaskConical } from "lucide-react";
 import { KPICard } from "@/components/shared/KPICard";
 import { GlobalFilters, FilterState, defaultFilters, filterSKUs } from "@/components/shared/GlobalFilters";
 import { InlineNudge } from "@/components/shared/InlineNudge";
@@ -73,9 +74,52 @@ const statusIcon = {
   rejected: <AlertTriangle className="h-3 w-3 text-destructive" />,
 };
 
+function generateNarrative(skuId: string) {
+  const sku = skuMaster.find(s => s.id === skuId)!;
+  const alerts = skuAlerts.filter(a => a.skuId === skuId);
+  const materials = bomTable.filter(b => b.skuId === skuId).map(b => {
+    const mat = materialMaster.find(m => m.id === b.materialId)!;
+    return { ...mat, pct: b.compositionPct };
+  });
+
+  const lines: string[] = [];
+  lines.push(`${sku.name} generates $${(sku.revenue / 1e6).toFixed(1)}M in annual revenue at a ${sku.currentMargin}% gross margin, with ${(sku.annualVolume / 1e6).toFixed(1)}M units across the ${sku.region} ${sku.channel} channel.`);
+
+  if (materials.length > 0) {
+    const topMat = materials.sort((a, b) => b.pct - a.pct)[0];
+    lines.push(`The primary raw material is ${topMat.name} (${topMat.pct}% composition) at $${topMat.costPerKg}/kg sourced from ${topMat.supplierId}.`);
+  }
+
+  const highAlerts = alerts.filter(a => a.severity === "high");
+  const medAlerts = alerts.filter(a => a.severity === "medium");
+  if (highAlerts.length > 0) {
+    lines.push(`⚠️ Critical: ${highAlerts.map(a => a.title).join("; ")}. Combined impact: ${highAlerts.map(a => a.impact).join(", ")}.`);
+  }
+  if (medAlerts.length > 0) {
+    lines.push(`Monitoring: ${medAlerts.map(a => a.title).join("; ")}.`);
+  }
+
+  const subOpps = alerts.filter(a => a.type === "substitution_opportunity");
+  if (subOpps.length > 0) {
+    lines.push(`💡 Opportunity: ${subOpps.map(a => a.description).join(" ")} Potential impact: ${subOpps.map(a => a.impact).join(", ")}.`);
+  }
+
+  if (sku.currentMargin < 25) {
+    lines.push(`Recommendation: Margin is below the 25% threshold — prioritize cost optimization or pricing review immediately.`);
+  } else if (sku.currentMargin < 30) {
+    lines.push(`Recommendation: Margin is trending toward threshold. Run simulation to identify substitution or sourcing levers.`);
+  } else {
+    lines.push(`Status: SKU is performing within healthy margin targets. Continue monitoring for cost volatility.`);
+  }
+
+  return lines;
+}
+
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [expandedSKU, setExpandedSKU] = useState<string | null>(null);
+  const [narrativeSKU, setNarrativeSKU] = useState<string | null>(null);
   const filteredSKUs = useMemo(() => filterSKUs(filters), [filters]);
 
   const filteredKPIs = useMemo(() => {
@@ -155,7 +199,7 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Revenue</p>
                       <p className="text-xs font-semibold">${(sku.revenue / 1e6).toFixed(1)}M</p>
@@ -179,6 +223,22 @@ const Dashboard = () => {
                         <Badge variant="outline" className="text-[9px] text-accent border-accent/30">Healthy</Badge>
                       )}
                     </div>
+                    <div className="flex items-center gap-1 ml-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => setNarrativeSKU(narrativeSKU === sku.id ? null : sku.id)}
+                        className={`p-1.5 rounded-md transition-colors ${narrativeSKU === sku.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
+                        title="Explain narrative"
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => navigate(`/simulation?sku=${sku.id}`)}
+                        className="p-1.5 rounded-md hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
+                        title="Run simulation"
+                      >
+                        <FlaskConical className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </button>
 
@@ -193,6 +253,25 @@ const Dashboard = () => {
                       className="overflow-hidden"
                     >
                       <div className="px-4 pb-4 pt-1 border-t border-border/30">
+                        {/* Narrative Panel */}
+                        <AnimatePresence>
+                          {narrativeSKU === sku.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="mb-3 mt-2 rounded-lg bg-primary/[0.03] border border-primary/20 p-3 space-y-2"
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <BookOpen className="h-3.5 w-3.5 text-primary" />
+                                <p className="text-[11px] font-semibold text-primary">SKU Narrative</p>
+                              </div>
+                              {generateNarrative(sku.id).map((line, i) => (
+                                <p key={i} className="text-[11px] text-foreground/80 leading-relaxed">{line}</p>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
                           {/* Alerts */}
                           <div>
