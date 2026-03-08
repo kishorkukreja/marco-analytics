@@ -199,7 +199,7 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">Revenue</p>
                       <p className="text-xs font-semibold">${(sku.revenue / 1e6).toFixed(1)}M</p>
@@ -222,6 +222,22 @@ const Dashboard = () => {
                       ) : (
                         <Badge variant="outline" className="text-[9px] text-accent border-accent/30">Healthy</Badge>
                       )}
+                    </div>
+                    <div className="flex items-center gap-1 ml-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => setNarrativeSKU(narrativeSKU === sku.id ? null : sku.id)}
+                        className={`p-1.5 rounded-md transition-colors ${narrativeSKU === sku.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
+                        title="Explain narrative"
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => navigate(`/simulation?sku=${sku.id}`)}
+                        className="p-1.5 rounded-md hover:bg-accent/10 text-muted-foreground hover:text-accent transition-colors"
+                        title="Run simulation"
+                      >
+                        <FlaskConical className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
                 </button>
