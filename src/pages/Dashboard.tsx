@@ -163,7 +163,7 @@ const Dashboard = () => {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard icon={DollarSign} title="Total Revenue" value={`$${(filteredKPIs.revenue / 1e6).toFixed(1)}M`} trend={{ value: 8.2, label: "vs LY" }} delay={0} />
         <KPICard icon={TrendingUp} title="Avg Gross Margin" value={`${filteredKPIs.margin}%`} trend={{ value: 2.4, label: "vs LY" }} variant="accent" delay={0.05} />
         <KPICard icon={Target} title="Identified Savings" value={`$${(dashboardKPIs.identifiedSavings / 1e6).toFixed(1)}M`} subtitle="Across 14 active simulations" variant="accent" delay={0.1} />
