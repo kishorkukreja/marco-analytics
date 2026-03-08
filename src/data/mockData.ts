@@ -242,3 +242,120 @@ export const dashboardKPIs = {
   forecastAccuracy: 91.4,
   optimizationRuns: 47,
 };
+
+// ========== TREND DATA (12 months) ==========
+export const trendData = months12.map((month, i) => {
+  const baseCost = 68 + Math.sin(i * 0.4) * 4 + i * 0.3;
+  const baseRev = 8.2 + Math.sin(i * 0.6) * 1.5 + i * 0.25;
+  return {
+    month,
+    totalCost: +baseCost.toFixed(1),
+    revenue: +baseRev.toFixed(1),
+    margin: +(((baseRev - baseCost / 10) / baseRev) * 100).toFixed(1),
+    lyRevenue: +(baseRev * 0.92).toFixed(1),
+    lyCost: +(baseCost * 0.95).toFixed(1),
+  };
+});
+
+// ========== SAVINGS BY CATEGORY ==========
+export const savingsByCategory = [
+  { category: "Laundry", realized: 890000, potential: 1200000 },
+  { category: "Dishwash", realized: 340000, potential: 520000 },
+  { category: "Personal Care", realized: 620000, potential: 780000 },
+  { category: "Home Care", realized: 490000, potential: 640000 },
+];
+
+// ========== SKU ALERTS ==========
+export interface SKUAlert {
+  id: string;
+  skuId: string;
+  type: "margin_erosion" | "cost_spike" | "substitution_opportunity" | "forecast_deviation";
+  severity: "high" | "medium" | "low";
+  title: string;
+  description: string;
+  impact: string;
+  timestamp: string;
+}
+
+export const skuAlerts: SKUAlert[] = [
+  { id: "ALR-001", skuId: "SKU-006", type: "margin_erosion", severity: "high", title: "Margin below threshold", description: "BrightWave Softener margin dropped to 22.8%, below 25% floor", impact: "-$180K annual", timestamp: "2h ago" },
+  { id: "ALR-002", skuId: "SKU-001", type: "cost_spike", severity: "high", title: "LAS surfactant cost +12%", description: "MAT-001 cost increased from $2.85 to $3.19/kg over 3 months", impact: "+$410K COGS", timestamp: "4h ago" },
+  { id: "ALR-003", skuId: "SKU-005", type: "margin_erosion", severity: "medium", title: "LATAM freight increase", description: "AquaFresh Surface Cleaner freight costs up 15% due to route changes", impact: "-$95K annual", timestamp: "6h ago" },
+  { id: "ALR-004", skuId: "SKU-001", type: "substitution_opportunity", severity: "low", title: "AOS substitute available", description: "MAT-010 (AOS) shows 89.4% similarity to LAS at 16% lower cost", impact: "+$320K savings", timestamp: "1d ago" },
+  { id: "ALR-005", skuId: "SKU-003", type: "forecast_deviation", severity: "medium", title: "Q3 demand under-forecast", description: "FreshGlow Dishwash actual demand exceeded forecast by 14% in Sep", impact: "Lost sales risk", timestamp: "1d ago" },
+  { id: "ALR-006", skuId: "SKU-008", type: "substitution_opportunity", severity: "low", title: "SLES alternative identified", description: "AOS surfactant viable for VelvetTouch Body Wash with 82% similarity", impact: "+$210K savings", timestamp: "2d ago" },
+  { id: "ALR-007", skuId: "SKU-002", type: "cost_spike", severity: "medium", title: "Zeolite 4A supply tightening", description: "IndoChem lead times extended to 28 days, MOQ increased", impact: "Supply risk", timestamp: "3d ago" },
+];
+
+// ========== HEURISTIC FORECAST DATA ==========
+export function generateHeuristicForecast(skuId: string) {
+  const skuForecasts = forecastData.filter(f => f.skuId === skuId);
+  return skuForecasts.map((f, i) => {
+    const base = f.baselineForecast;
+    // CoC (Change over Change) - previous period growth applied
+    const prevBase = i > 0 ? skuForecasts[i - 1].baselineForecast : base;
+    const cocGrowth = i > 1 ? (skuForecasts[i - 1].baselineForecast / skuForecasts[i - 2].baselineForecast) : 1;
+    const coc = Math.round(prevBase * cocGrowth);
+
+    // LY (Last Year) - same month last year
+    const lyIdx = i - 12;
+    const ly = lyIdx >= 0 ? skuForecasts[lyIdx].baselineForecast : base;
+
+    // L2Y (Last 2 Years average)
+    const l2yIdx = i - 24;
+    const l2y = l2yIdx >= 0
+      ? Math.round((skuForecasts[lyIdx]?.baselineForecast + skuForecasts[l2yIdx]?.baselineForecast) / 2)
+      : lyIdx >= 0 ? ly : base;
+
+    return {
+      month: f.month,
+      baseline: base,
+      adjusted: f.adjustedForecast,
+      actual: f.actualDemand,
+      coc,
+      ly,
+      l2y,
+      confidenceScore: f.confidenceScore,
+      anomalyFlag: f.anomalyFlag,
+    };
+  });
+}
+
+export function computeHeuristicConfidence(heuristicData: ReturnType<typeof generateHeuristicForecast>) {
+  const withActuals = heuristicData.filter(d => d.actual !== null);
+  if (withActuals.length === 0) return { total: 75, cocAlignment: 70, lyAlignment: 75, l2yAlignment: 72, biasStability: 78, volatility: 68 };
+
+  // CoC alignment: how close CoC heuristic is to actual
+  const cocErrors = withActuals.map(d => Math.abs((d.coc - d.actual!) / d.actual!));
+  const cocAlignment = Math.max(0, 100 - (cocErrors.reduce((a, b) => a + b, 0) / cocErrors.length) * 100 * 2);
+
+  // LY alignment
+  const lyErrors = withActuals.map(d => Math.abs((d.ly - d.actual!) / d.actual!));
+  const lyAlignment = Math.max(0, 100 - (lyErrors.reduce((a, b) => a + b, 0) / lyErrors.length) * 100 * 2);
+
+  // L2Y alignment
+  const l2yErrors = withActuals.map(d => Math.abs((d.l2y - d.actual!) / d.actual!));
+  const l2yAlignment = Math.max(0, 100 - (l2yErrors.reduce((a, b) => a + b, 0) / l2yErrors.length) * 100 * 2);
+
+  // Bias stability: consistency of forecast errors
+  const biases = withActuals.map(d => (d.baseline - d.actual!) / d.actual!);
+  const avgBias = biases.reduce((a, b) => a + b, 0) / biases.length;
+  const biasVariance = biases.reduce((a, b) => a + Math.pow(b - avgBias, 2), 0) / biases.length;
+  const biasStability = Math.max(0, Math.min(100, 100 - biasVariance * 1000));
+
+  // Volatility
+  const diffs = withActuals.slice(1).map((d, i) => Math.abs(d.actual! - withActuals[i].actual!) / withActuals[i].actual!);
+  const avgVol = diffs.length > 0 ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0.1;
+  const volatility = Math.max(0, Math.min(100, 100 - avgVol * 200));
+
+  const total = +(cocAlignment * 0.25 + lyAlignment * 0.25 + l2yAlignment * 0.20 + biasStability * 0.15 + volatility * 0.15).toFixed(1);
+
+  return {
+    total,
+    cocAlignment: +cocAlignment.toFixed(1),
+    lyAlignment: +lyAlignment.toFixed(1),
+    l2yAlignment: +l2yAlignment.toFixed(1),
+    biasStability: +biasStability.toFixed(1),
+    volatility: +volatility.toFixed(1),
+  };
+}

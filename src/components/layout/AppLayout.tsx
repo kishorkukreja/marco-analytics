@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
+import { CopilotPanel } from "@/components/shared/CopilotPanel";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </main>
         </div>
       </div>
+      <CopilotPanel />
     </SidebarProvider>
   );
 }
