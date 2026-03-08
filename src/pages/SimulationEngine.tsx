@@ -15,6 +15,10 @@ const SimulationEngine = () => {
   const [selectedSubstitute, setSelectedSubstitute] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
   const [simComplete, setSimComplete] = useState(false);
+  const [monteCarloEnabled, setMonteCarloEnabled] = useState(false);
+  const [mcRunning, setMcRunning] = useState(false);
+  const [mcIterations, setMcIterations] = useState(0);
+  const [mcData, setMcData] = useState<{ bin: string; count: number; cumPct: number }[]>([]);
 
   const sku = skuMaster.find(s => s.id === selectedSKU)!;
   const skuMaterials = bomTable.filter(b => b.skuId === selectedSKU).map(b => ({
