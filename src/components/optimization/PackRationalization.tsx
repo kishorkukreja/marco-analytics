@@ -8,7 +8,6 @@ import { Progress } from "@/components/ui/progress";
 import { skuMaster } from "@/data/mockData";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  TreemapChart,
 } from "recharts";
 
 // Pack size data derived from SKU master
