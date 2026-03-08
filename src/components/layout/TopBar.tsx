@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Bell, User, SlidersHorizontal, AlertTriangle, TrendingDown, AlertCircle, Lightbulb, BarChart3, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bell, User, Moon, Sun, X, AlertTriangle, TrendingDown, AlertCircle, Lightbulb, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
