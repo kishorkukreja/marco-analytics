@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Bell, User, SlidersHorizontal, AlertTriangle, TrendingDown, AlertCircle, Lightbulb, BarChart3, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bell, User, Moon, Sun, X, AlertTriangle, TrendingDown, AlertCircle, Lightbulb, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -22,6 +22,12 @@ const severityDot: Record<string, string> = {
 export function TopBar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   const activeAlerts = skuAlerts.filter(a => !dismissed.has(a.id));
   const highCount = activeAlerts.filter(a => a.severity === "high").length;
@@ -36,7 +42,15 @@ export function TopBar() {
         <Badge variant="outline" className="text-[10px] uppercase tracking-wider">Live</Badge>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {/* Dark mode toggle */}
+        <button
+          onClick={() => setDark(d => !d)}
+          className="p-2 rounded-md hover:bg-muted transition-colors"
+          aria-label="Toggle dark mode"
+        >
+          {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+        </button>
         {/* Notifications */}
         <Popover open={notifOpen} onOpenChange={setNotifOpen}>
           <PopoverTrigger asChild>
