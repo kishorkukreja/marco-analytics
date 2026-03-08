@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Bell, User, Moon, Sun, X, AlertTriangle, TrendingDown, AlertCircle, Lightbulb, BarChart3 } from "lucide-react";
+import { Bell, User, Moon, Sun, X, AlertTriangle, TrendingDown, AlertCircle, Lightbulb, BarChart3, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { skuAlerts, SKUAlert } from "@/data/mockData";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const alertTypeConfig: Record<SKUAlert["type"], { icon: typeof AlertTriangle; color: string }> = {
   margin_erosion: { icon: TrendingDown, color: "text-destructive" },
@@ -23,6 +24,8 @@ export function TopBar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -32,6 +35,7 @@ export function TopBar() {
   const activeAlerts = skuAlerts.filter(a => !dismissed.has(a.id));
   const highCount = activeAlerts.filter(a => a.severity === "high").length;
   const medCount = activeAlerts.filter(a => a.severity === "medium").length;
+  const isSettings = location.pathname === "/settings";
 
   return (
     <header className="h-14 border-b bg-card flex items-center justify-between px-4 gap-4 flex-shrink-0">
@@ -51,6 +55,16 @@ export function TopBar() {
         >
           {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
         </button>
+
+        {/* Settings */}
+        <button
+          onClick={() => navigate("/settings")}
+          className={`p-2 rounded-md transition-colors ${isSettings ? "bg-primary/10 text-primary" : "hover:bg-muted text-muted-foreground"}`}
+          aria-label="Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+
         {/* Notifications */}
         <Popover open={notifOpen} onOpenChange={setNotifOpen}>
           <PopoverTrigger asChild>
