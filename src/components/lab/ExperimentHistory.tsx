@@ -13,6 +13,15 @@ interface ExperimentHistoryProps {
   onUpdateNotes: (id: string, notes: string) => void;
 }
 
+const propertyLabels: Record<string, string> = {
+  pH: "pH",
+  viscosity: "Visc.",
+  density: "Density",
+  foamIndex: "Foam",
+  textureScore: "Texture",
+  consistencyRating: "Consist.",
+};
+
 export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes }: ExperimentHistoryProps) {
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [expandedNotes, setExpandedNotes] = useState<string | null>(null);
@@ -35,12 +44,6 @@ export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes
     );
   }
 
-  const verdictStyle: Record<string, string> = {
-    Pass: "bg-accent/10 text-accent",
-    Review: "bg-warning/10 text-warning",
-    Fail: "bg-destructive/10 text-destructive",
-  };
-
   return (
     <div className="space-y-4">
       <Table>
@@ -50,8 +53,9 @@ export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes
             <TableHead className="text-[10px]">Name</TableHead>
             <TableHead className="text-[10px]">SKU</TableHead>
             <TableHead className="text-[10px]">Date</TableHead>
+            <TableHead className="text-[10px]">Recipe Cost</TableHead>
+            <TableHead className="text-[10px]">R&D Cost</TableHead>
             <TableHead className="text-[10px]">Cost Δ</TableHead>
-            <TableHead className="text-[10px]">Quality</TableHead>
             <TableHead className="text-[10px]">Notes</TableHead>
             <TableHead className="text-[10px]">Actions</TableHead>
           </TableRow>
@@ -76,13 +80,12 @@ export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes
                   <TableCell className="text-xs font-medium">{exp.name}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{sku?.name || exp.skuId}</TableCell>
                   <TableCell className="text-[10px] text-muted-foreground font-mono">{exp.date}</TableCell>
+                  <TableCell className="text-xs font-mono text-muted-foreground">${exp.recipeCost.toFixed(3)}</TableCell>
+                  <TableCell className="text-xs font-mono text-foreground">${exp.rdCost.toFixed(3)}</TableCell>
                   <TableCell>
-                    <span className={`text-xs font-mono ${costDelta <= 0 ? "text-accent" : "text-destructive"}`}>
-                      {costDelta <= 0 ? "" : "+"}{costDelta.toFixed(3)}
+                    <span className="text-xs font-mono text-foreground">
+                      {costDelta === 0 ? "—" : `${costDelta > 0 ? "+" : ""}${costDelta.toFixed(3)}`}
                     </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={`text-[9px] ${verdictStyle[exp.results.verdict]}`}>{exp.results.verdict}</Badge>
                   </TableCell>
                   <TableCell>
                     <button
@@ -111,7 +114,7 @@ export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes
                 </TableRow>
                 {isExpanded && (
                   <TableRow key={`${exp.id}-notes`}>
-                    <TableCell colSpan={8} className="pt-0 pb-3">
+                    <TableCell colSpan={9} className="pt-0 pb-3">
                       <div className="pl-8">
                         <Textarea
                           placeholder="Document your hypothesis, observations, or conclusions..."
@@ -140,27 +143,21 @@ export function ExperimentHistory({ experiments, onLoad, onDelete, onUpdateNotes
             {compareExps.map(exp => (
               <div key={exp.id} className="border rounded-lg p-4">
                 <p className="text-xs font-semibold mb-3">{exp.name}</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {(Object.entries(exp.results.properties) as [string, number][]).map(([key, val]) => (
                     <div key={key}>
-                      <p className="text-[9px] text-muted-foreground uppercase">{key}</p>
-                      <p className={`text-xs font-mono font-bold ${exp.results.details[key] === "pass" ? "text-accent" : exp.results.details[key] === "fail" ? "text-destructive" : "text-warning"}`}>
-                        {val}
-                      </p>
+                      <p className="text-[9px] text-muted-foreground uppercase">{propertyLabels[key] || key}</p>
+                      <p className="text-xs font-mono font-bold text-foreground">{val}</p>
                     </div>
                   ))}
                   <div>
                     <p className="text-[9px] text-muted-foreground uppercase">Cost</p>
                     <p className="text-xs font-mono font-bold text-foreground">${exp.rdCost.toFixed(3)}</p>
                   </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground uppercase">Verdict</p>
-                    <Badge className={`text-[9px] ${verdictStyle[exp.results.verdict]}`}>{exp.results.verdict}</Badge>
-                  </div>
                 </div>
                 {exp.notes && (
                   <div className="mt-3 pt-2 border-t">
-                    <p className="text-[9px] text-muted-foreground uppercase mb-1">Notes</p>
+                    <p className="text-[9px] text-muted-foreground uppercase mb-1">Scientist Notes</p>
                     <p className="text-[10px] text-foreground whitespace-pre-wrap">{exp.notes}</p>
                   </div>
                 )}
