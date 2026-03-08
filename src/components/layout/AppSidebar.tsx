@@ -1,4 +1,4 @@
-import { BarChart3, Cpu, FlaskConical, BrainCircuit, Lightbulb, Server, Settings, ChevronLeft, Zap } from "lucide-react";
+import { BarChart3, Cpu, FlaskConical, BrainCircuit, Lightbulb, Server, Settings, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
@@ -42,11 +42,6 @@ export function AppSidebar() {
               <p className="text-[10px] text-sidebar-foreground/60 tracking-widest uppercase">Forecast Intelligence</p>
             </div>
           )}
-          {!collapsed && (
-            <button onClick={toggleSidebar} className="text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors">
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
         </div>
       </SidebarHeader>
 
@@ -58,7 +53,11 @@ export function AppSidebar() {
                 const isActive = location.pathname === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={collapsed ? item.title : undefined}
+                      className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"}
+                    >
                       <NavLink to={item.url} end>
                         <item.icon className="h-4 w-4 flex-shrink-0" />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
@@ -72,13 +71,24 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-2">
         {!collapsed && (
-          <div className="rounded-lg bg-sidebar-accent/50 p-3">
+          <div className="rounded-lg bg-sidebar-accent/50 p-3 mb-2">
             <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50 mb-1">Environment</p>
             <p className="text-xs font-medium text-sidebar-primary">Production • v2.4.1</p>
           </div>
         )}
+        <button
+          onClick={toggleSidebar}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : (
+            <>
+              <ChevronLeft className="h-4 w-4" />
+              <span className="text-[11px]">Collapse</span>
+            </>
+          )}
+        </button>
       </SidebarFooter>
     </Sidebar>
   );
