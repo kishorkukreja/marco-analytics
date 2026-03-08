@@ -22,6 +22,12 @@ const severityDot: Record<string, string> = {
 export function TopBar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  }, [dark]);
 
   const activeAlerts = skuAlerts.filter(a => !dismissed.has(a.id));
   const highCount = activeAlerts.filter(a => a.severity === "high").length;
