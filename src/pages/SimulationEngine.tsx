@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,10 +13,12 @@ import { skuMaster, materialMaster, bomTable, supplierMaster, calculateSimilarit
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, ReferenceLine } from "recharts";
 
 const SimulationEngine = () => {
+  const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const filteredSKUs = useMemo(() => filterSKUs(filters), [filters]);
 
-  const [selectedSKU, setSelectedSKU] = useState(skuMaster[0].id);
+  const initialSKU = searchParams.get("sku") || skuMaster[0].id;
+  const [selectedSKU, setSelectedSKU] = useState(initialSKU);
   const [selectedMaterial, setSelectedMaterial] = useState("");
   const [selectedSubstitute, setSelectedSubstitute] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
