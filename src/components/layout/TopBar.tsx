@@ -42,7 +42,15 @@ export function TopBar() {
         <Badge variant="outline" className="text-[10px] uppercase tracking-wider">Live</Badge>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {/* Dark mode toggle */}
+        <button
+          onClick={() => setDark(d => !d)}
+          className="p-2 rounded-md hover:bg-muted transition-colors"
+          aria-label="Toggle dark mode"
+        >
+          {dark ? <Sun className="h-4 w-4 text-muted-foreground" /> : <Moon className="h-4 w-4 text-muted-foreground" />}
+        </button>
         {/* Notifications */}
         <Popover open={notifOpen} onOpenChange={setNotifOpen}>
           <PopoverTrigger asChild>

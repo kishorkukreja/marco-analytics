@@ -2,12 +2,18 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   Zap, BarChart3, FlaskConical, BrainCircuit, TrendingUp, TrendingDown,
-  ArrowRight, Shield, Activity, DollarSign, AlertTriangle, Boxes
+  ArrowRight, Shield, Activity, DollarSign, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { dashboardKPIs, skuAlerts, trendData } from "@/data/mockData";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
+import { useCountUp } from "@/hooks/useCountUp";
+
+function AnimatedKPI({ value, prefix = "", suffix = "", decimals = 0, delay = 0 }: { value: number; prefix?: string; suffix?: string; decimals?: number; delay?: number }) {
+  const count = useCountUp(value, 1400, delay);
+  return <span>{prefix}{count.toFixed(decimals)}{suffix}</span>;
+}
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -19,10 +25,8 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-[calc(100vh-64px)] flex flex-col">
-
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden">
-        {/* Background pattern */}
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)`,
           backgroundSize: "32px 32px",
@@ -78,10 +82,10 @@ const LandingPage = () => {
             className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-10"
           >
             {[
-              { label: "Portfolio Revenue", value: `$${(dashboardKPIs.totalRevenue / 1e6).toFixed(1)}M`, icon: DollarSign, trend: revGrowth, color: "text-accent" },
-              { label: "Avg Gross Margin", value: `${dashboardKPIs.avgMargin}%`, icon: TrendingUp, trend: 1.2, color: "text-accent" },
-              { label: "Identified Savings", value: `$${(dashboardKPIs.identifiedSavings / 1e6).toFixed(1)}M`, icon: Activity, trend: 14, color: "text-accent" },
-              { label: "Active Risk Alerts", value: `${criticalAlerts}`, icon: AlertTriangle, trend: null, color: "text-warning" },
+              { label: "Portfolio Revenue", numValue: dashboardKPIs.totalRevenue / 1e6, prefix: "$", suffix: "M", decimals: 1, icon: DollarSign, trend: revGrowth, color: "text-accent" },
+              { label: "Avg Gross Margin", numValue: dashboardKPIs.avgMargin, suffix: "%", decimals: 1, icon: TrendingUp, trend: 1.2, color: "text-accent" },
+              { label: "Identified Savings", numValue: dashboardKPIs.identifiedSavings / 1e6, prefix: "$", suffix: "M", decimals: 1, icon: Activity, trend: 14, color: "text-accent" },
+              { label: "Active Risk Alerts", numValue: criticalAlerts, decimals: 0, icon: AlertTriangle, trend: null, color: "text-warning" },
             ].map((kpi, i) => (
               <motion.div
                 key={kpi.label}
@@ -102,7 +106,9 @@ const LandingPage = () => {
                   )}
                   {kpi.trend === null && <Badge className="bg-warning/10 text-warning border-warning/20 text-[9px]">Attention</Badge>}
                 </div>
-                <p className="text-xl font-bold text-foreground">{kpi.value}</p>
+                <p className="text-xl font-bold text-foreground">
+                  <AnimatedKPI value={kpi.numValue} prefix={kpi.prefix || ""} suffix={kpi.suffix || ""} decimals={kpi.decimals} delay={400 + i * 100} />
+                </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{kpi.label}</p>
               </motion.div>
             ))}
@@ -211,16 +217,16 @@ const LandingPage = () => {
             <AreaChart data={trendData}>
               <defs>
                 <linearGradient id="heroRev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(213, 62%, 44%)" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="hsl(213, 62%, 44%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="heroMargin" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(160, 64%, 40%)" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="hsl(160, 64%, 40%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <Area type="monotone" dataKey="revenue" stroke="hsl(213, 62%, 44%)" fill="url(#heroRev)" strokeWidth={2} />
-              <Area type="monotone" dataKey="margin" stroke="hsl(160, 64%, 40%)" fill="url(#heroMargin)" strokeWidth={2} />
+              <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#heroRev)" strokeWidth={2} />
+              <Area type="monotone" dataKey="margin" stroke="hsl(var(--accent))" fill="url(#heroMargin)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
