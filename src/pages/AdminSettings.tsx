@@ -1,14 +1,59 @@
 import { motion } from "framer-motion";
-import { Settings, Users, Database, Bell, Shield, Globe } from "lucide-react";
+import { Settings, Users, Database, Bell, Shield, Globe, SlidersHorizontal } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 const AdminSettings = () => {
+  const [riskThreshold, setRiskThreshold] = useState(40);
+
   return (
     <div className="space-y-6 max-w-[1000px] mx-auto">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <h1 className="text-2xl font-bold tracking-tight">Admin Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Platform configuration and user management</p>
+        <p className="text-sm text-muted-foreground mt-1">Platform configuration, thresholds, and user management</p>
+      </motion.div>
+
+      {/* Risk Threshold - moved from TopBar */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="kpi-card">
+        <div className="flex items-center gap-2 mb-4">
+          <SlidersHorizontal className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Risk Threshold Configuration</h3>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Global Risk Threshold</span>
+            <span className="text-sm font-bold text-primary">{riskThreshold}%</span>
+          </div>
+          <Slider
+            value={[riskThreshold]}
+            onValueChange={(v) => setRiskThreshold(v[0])}
+            max={100}
+            min={0}
+            step={5}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground">Materials above {riskThreshold}% risk will be flagged across all screens. Lowering this value will surface more alerts.</p>
+          <div className="grid grid-cols-3 gap-3 mt-2">
+            {[
+              { label: "Conservative", value: 25, desc: "More alerts, lower risk tolerance" },
+              { label: "Balanced", value: 40, desc: "Recommended for most portfolios" },
+              { label: "Aggressive", value: 60, desc: "Fewer alerts, higher risk tolerance" },
+            ].map(preset => (
+              <button
+                key={preset.value}
+                onClick={() => setRiskThreshold(preset.value)}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  riskThreshold === preset.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
+                }`}
+              >
+                <p className="text-xs font-semibold">{preset.label}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{preset.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
       </motion.div>
 
       {[
@@ -37,7 +82,7 @@ const AdminSettings = () => {
           { label: "Email Digest", value: false, type: "toggle" },
         ]},
       ].map((section, i) => (
-        <motion.div key={section.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="kpi-card">
+        <motion.div key={section.title} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.08 }} className="kpi-card">
           <div className="flex items-center gap-2 mb-4">
             <section.icon className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold">{section.title}</h3>
