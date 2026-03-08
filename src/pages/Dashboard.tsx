@@ -4,9 +4,10 @@ import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Target, AlertCircl
 import { KPICard } from "@/components/shared/KPICard";
 import { GlobalFilters, FilterState, defaultFilters, filterSKUs } from "@/components/shared/GlobalFilters";
 import { InlineNudge } from "@/components/shared/InlineNudge";
-import { dashboardKPIs, skuMaster, trendData, savingsByCategory, skuAlerts, SKUAlert, bomTable, materialMaster } from "@/data/mockData";
+import { dashboardKPIs, skuMaster, trendData, savingsByCategory, skuAlerts, SKUAlert, bomTable, materialMaster, costOverTime, serviceLevelData, marginByChannel, costByRegion } from "@/data/mockData";
 import { Badge } from "@/components/ui/badge";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, LineChart, Line, Legend } from "recharts";
 
 const alertTypeConfig: Record<SKUAlert["type"], { icon: typeof AlertTriangle; color: string; label: string }> = {
   margin_erosion: { icon: TrendingDown, color: "text-destructive", label: "Margin" },
