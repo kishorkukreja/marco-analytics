@@ -139,19 +139,19 @@ const Dashboard = () => {
   }, [filters.category]);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-[1400px] mx-auto">
       {/* Header + Filters */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-        <div className="flex items-end justify-between">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1">
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Executive Summary</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Executive Summary</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Portfolio overview across {filteredKPIs.skuCount} SKU{filteredKPIs.skuCount !== 1 ? "s" : ""} • Real-time insights
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">Last updated: 2 min ago</p>
+          <p className="text-[10px] sm:text-xs text-muted-foreground">Last updated: 2 min ago</p>
         </div>
-        <div className="kpi-card !p-3">
+        <div className="kpi-card !p-2 sm:!p-3">
           <GlobalFilters filters={filters} onChange={setFilters} />
         </div>
       </motion.div>
@@ -163,7 +163,7 @@ const Dashboard = () => {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KPICard icon={DollarSign} title="Total Revenue" value={`$${(filteredKPIs.revenue / 1e6).toFixed(1)}M`} trend={{ value: 8.2, label: "vs LY" }} delay={0} />
         <KPICard icon={TrendingUp} title="Avg Gross Margin" value={`${filteredKPIs.margin}%`} trend={{ value: 2.4, label: "vs LY" }} variant="accent" delay={0.05} />
         <KPICard icon={Target} title="Identified Savings" value={`$${(dashboardKPIs.identifiedSavings / 1e6).toFixed(1)}M`} subtitle="Across 14 active simulations" variant="accent" delay={0.1} />
@@ -185,22 +185,22 @@ const Dashboard = () => {
                 {/* Header row */}
                 <button
                   onClick={() => setExpandedSKU(isExpanded ? null : sku.id)}
-                  className="w-full flex items-center justify-between p-3 text-left"
+                  className="w-full flex items-center justify-between p-2 sm:p-3 text-left"
                 >
-                  <div className="flex items-center gap-3">
-                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
-                    <div>
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-0" : "-rotate-90"}`} />
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold">{sku.id}</span>
-                        <span className="text-xs text-muted-foreground">{sku.name}</span>
+                        <span className="text-xs text-muted-foreground truncate hidden sm:inline">{sku.name}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground">{sku.brand} • {sku.category} • {sku.region}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{sku.brand} • {sku.category} • {sku.region}</span>
                       </div>
                     </div>
                   </div>
-                    <div className="flex items-center gap-4">
-                    <div className="text-right">
+                  <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                    <div className="text-right hidden sm:block">
                       <p className="text-xs text-muted-foreground">Revenue</p>
                       <p className="text-xs font-semibold">${(sku.revenue / 1e6).toFixed(1)}M</p>
                     </div>
@@ -210,11 +210,11 @@ const Dashboard = () => {
                         {sku.currentMargin}%
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right hidden md:block">
                       <p className="text-xs text-muted-foreground">Volume</p>
                       <p className="text-xs font-semibold">{(sku.annualVolume / 1e6).toFixed(1)}M</p>
                     </div>
-                    <div className="w-16 text-center">
+                    <div className="w-14 sm:w-16 text-center">
                       {hasHighAlert ? (
                         <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[9px]">{skuAlertCount} Alert{skuAlertCount > 1 ? "s" : ""}</Badge>
                       ) : skuAlertCount > 0 ? (
@@ -223,7 +223,7 @@ const Dashboard = () => {
                         <Badge variant="outline" className="text-[9px] text-accent border-accent/30">Healthy</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 ml-2" onClick={e => e.stopPropagation()}>
+                    <div className="items-center gap-1 ml-1 sm:ml-2 hidden sm:flex" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => setNarrativeSKU(narrativeSKU === sku.id ? null : sku.id)}
                         className={`p-1.5 rounded-md transition-colors ${narrativeSKU === sku.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
@@ -233,7 +233,6 @@ const Dashboard = () => {
                       </button>
                       <button
                         onClick={() => {
-                          // Find matching scenario trigger for this SKU
                           const alertForSku = skuAlerts.find(a => a.skuId === sku.id);
                           const triggerMap: Record<string, string> = {
                             cost_spike: "SCN-001",
@@ -369,10 +368,10 @@ const Dashboard = () => {
       </motion.div>
 
       {/* Trend + Tabbed Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="lg:col-span-2 kpi-card">
           <h3 className="text-sm font-semibold mb-4">Cost, Revenue & Margin Trend</h3>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={220} className="sm:!h-[280px]">
             <AreaChart data={trendData}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
