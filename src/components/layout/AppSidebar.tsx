@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Dashboard", url: "/", icon: BarChart3 },
+  { title: "Home", url: "/", icon: Zap },
+  { title: "Dashboard", url: "/dashboard", icon: BarChart3 },
   { title: "Simulation Engine", url: "/simulation", icon: FlaskConical },
   { title: "Optimization Engine", url: "/optimization", icon: Cpu },
   { title: "Forecast Intelligence", url: "/forecast", icon: BrainCircuit },
