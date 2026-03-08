@@ -116,7 +116,7 @@ export const bomTable: BOMEntry[] = [
 ];
 
 // ========== HISTORICAL COST DATA (12 months) ==========
-const months12 = ["Jan'24","Feb'24","Mar'24","Apr'24","May'24","Jun'24","Jul'24","Aug'24","Sep'24","Oct'24","Nov'24","Dec'24"];
+const months12 = ["Jan'25","Feb'25","Mar'25","Apr'25","May'25","Jun'25","Jul'25","Aug'25","Sep'25","Oct'25","Nov'25","Dec'25"];
 
 export const historicalCosts: CostRecord[] = materialMaster.flatMap(mat =>
   months12.map((month, i) => ({
