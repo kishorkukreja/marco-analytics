@@ -1,16 +1,77 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity } from "lucide-react";
+import {
+  ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity, TrendingUp,
+  DollarSign, Target, Leaf, BarChart3, Store, Ship, Save, GitCompare, X, Clock, Percent, Boxes, Factory
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { GlobalFilters, FilterState, defaultFilters, filterSKUs } from "@/components/shared/GlobalFilters";
 import { InlineNudge } from "@/components/shared/InlineNudge";
-import { skuMaster, materialMaster, bomTable, supplierMaster, calculateSimilarity, calculateRiskScore, simulateLandedCost } from "@/data/mockData";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, ReferenceLine } from "recharts";
+import {
+  skuMaster, materialMaster, bomTable, supplierMaster,
+  calculateSimilarity, calculateRiskScore, simulateLandedCost,
+  scenarioTriggers, ScenarioCategory, ScenarioTrigger,
+  simulateMultiMetric, MultiMetricResult, MetricKey, metricLabels, SavedScenario
+} from "@/data/mockData";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Cell, AreaChart, Area, ReferenceLine, RadarChart, Radar, PolarGrid,
+  PolarAngleAxis, PolarRadiusAxis, Legend
+} from "recharts";
+
+const scenarioIcons: Record<string, React.ElementType> = {
+  TrendingUp, AlertTriangle, DollarSign, Target, Leaf, BarChart3, Store, Ship,
+};
+
+const categoryLabels: Record<ScenarioCategory | "all", string> = {
+  all: "All Triggers",
+  macroeconomic: "Macroeconomic",
+  supply_chain: "Supply Chain",
+  strategic: "Strategic",
+  demand: "Demand",
+};
+
+const categoryColors: Record<ScenarioCategory, string> = {
+  macroeconomic: "bg-chart-3/10 text-chart-3 border-chart-3/30",
+  supply_chain: "bg-destructive/10 text-destructive border-destructive/30",
+  strategic: "bg-primary/10 text-primary border-primary/30",
+  demand: "bg-accent/10 text-accent border-accent/30",
+};
+
+const severityColors: Record<string, string> = {
+  critical: "bg-destructive text-destructive-foreground",
+  high: "bg-warning text-warning-foreground",
+  medium: "bg-secondary text-secondary-foreground",
+};
+
+const metricIcons: Record<MetricKey, React.ElementType> = {
+  serviceLevel: CheckCircle2,
+  margin: Percent,
+  inventoryTurnover: Boxes,
+  profitability: DollarSign,
+  timeToMake: Factory,
+  leadTime: Clock,
+};
+
+const SAVED_SCENARIOS_KEY = "sim_saved_scenarios";
+
+function loadSavedScenarios(): SavedScenario[] {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_SCENARIOS_KEY) || "[]");
+  } catch { return []; }
+}
+
+function persistScenarios(scenarios: SavedScenario[]) {
+  localStorage.setItem(SAVED_SCENARIOS_KEY, JSON.stringify(scenarios));
+}
 
 const SimulationEngine = () => {
   const [searchParams] = useSearchParams();
@@ -24,9 +85,23 @@ const SimulationEngine = () => {
   const [isSimulating, setIsSimulating] = useState(false);
   const [simComplete, setSimComplete] = useState(false);
   const [monteCarloEnabled, setMonteCarloEnabled] = useState(false);
+
+  // Scenario state
+  const [scenarioFilter, setScenarioFilter] = useState<ScenarioCategory | "all">("all");
+  const [selectedTrigger, setSelectedTrigger] = useState<ScenarioTrigger | null>(null);
+
+  // Multi-metric Monte Carlo
+  const [multiMetricResult, setMultiMetricResult] = useState<MultiMetricResult | null>(null);
   const [mcRunning, setMcRunning] = useState(false);
-  const [mcIterations, setMcIterations] = useState(0);
-  const [mcData, setMcData] = useState<{ bin: string; count: number; cumPct: number }[]>([]);
+  const [mcProgress, setMcProgress] = useState(0);
+  const [activeMetricTab, setActiveMetricTab] = useState<MetricKey>("serviceLevel");
+
+  // Save & Compare
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>(loadSavedScenarios);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [scenarioName, setScenarioName] = useState("");
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
 
   const sku = skuMaster.find(s => s.id === selectedSKU)!;
   const skuMaterials = bomTable.filter(b => b.skuId === selectedSKU).map(b => ({
@@ -40,7 +115,6 @@ const SimulationEngine = () => {
     }
   }, [selectedSKU]);
 
-  // Reset SKU selection when filters change
   useEffect(() => {
     if (filteredSKUs.length > 0 && !filteredSKUs.find(s => s.id === selectedSKU)) {
       setSelectedSKU(filteredSKUs[0].id);
@@ -74,60 +148,126 @@ const SimulationEngine = () => {
     return simulateLandedCost(sku, currentMaterial, selectedSub.material, bomEntry.compositionPct);
   }, [currentMaterial, selectedSub, bomEntry, sku]);
 
+  // Scenario triggers filtered
+  const filteredTriggers = useMemo(() =>
+    scenarioFilter === "all" ? scenarioTriggers : scenarioTriggers.filter(t => t.category === scenarioFilter),
+    [scenarioFilter]
+  );
+
+  // Handle scenario trigger selection
+  const selectTrigger = (trigger: ScenarioTrigger) => {
+    setSelectedTrigger(trigger);
+    // Auto-fill SKU and material
+    if (trigger.affectedSKUs.length > 0) {
+      const skuId = trigger.affectedSKUs[0];
+      setSelectedSKU(skuId);
+      setSelectedMaterial("");
+      setSelectedSubstitute("");
+      setSimComplete(false);
+      setMultiMetricResult(null);
+      // Set material after SKU change
+      setTimeout(() => {
+        const mats = bomTable.filter(b => b.skuId === skuId);
+        const affected = mats.find(b => trigger.affectedMaterials.includes(b.materialId));
+        if (affected) setSelectedMaterial(affected.materialId);
+        else if (mats.length > 0) setSelectedMaterial(mats[0].materialId);
+      }, 50);
+    }
+  };
+
   const runSimulation = () => {
     setIsSimulating(true);
     setSimComplete(false);
+    setMultiMetricResult(null);
     setTimeout(() => {
       setIsSimulating(false);
       setSimComplete(true);
     }, 800);
   };
 
-  // Monte Carlo
-  const runMonteCarlo = useCallback(() => {
-    if (!costSim) return;
+  // Multi-metric Monte Carlo
+  const runMultiMetric = useCallback(() => {
+    if (!currentMaterial || !selectedSub || !bomEntry) return;
     setMcRunning(true);
-    setMcIterations(0);
-    setMcData([]);
-    const N = 5000;
-    const results: number[] = [];
-    for (let i = 0; i < N; i++) {
-      const z1 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const z2 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const z3 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const z4 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      results.push(
-        costSim.substitute.formulation * (1 + z1 * 0.12) +
-        costSim.substitute.freight * (1 + z2 * 0.18) +
-        costSim.substitute.duty * (1 + z3 * 0.08) +
-        costSim.substitute.packaging * (1 + z4 * 0.05) +
-        costSim.substitute.manufacturing + costSim.substitute.warehouse
-      );
-    }
-    results.sort((a, b) => a - b);
-    const min = results[0], max = results[results.length - 1];
-    const bins = 30, binWidth = (max - min) / bins;
-    const histogram: typeof mcData = [];
-    let cum = 0;
-    for (let i = 0; i < bins; i++) {
-      const lo = min + i * binWidth;
-      const count = results.filter(r => r >= lo && r < lo + binWidth).length;
-      cum += count;
-      histogram.push({ bin: `$${(lo / 1000).toFixed(0)}K`, count, cumPct: Math.round((cum / N) * 100) });
-    }
-    let iter = 0;
-    const step = Math.ceil(N / 20);
+    setMcProgress(0);
+    let prog = 0;
     const interval = setInterval(() => {
-      iter += step;
-      if (iter >= N) { iter = N; clearInterval(interval); setMcRunning(false); setMcData(histogram); }
-      setMcIterations(iter);
-    }, 50);
-  }, [costSim]);
+      prog += 5;
+      setMcProgress(Math.min(prog, 100));
+      if (prog >= 100) {
+        clearInterval(interval);
+        const result = simulateMultiMetric(
+          sku, currentMaterial, selectedSub.material, bomEntry.compositionPct,
+          selectedTrigger?.severity || "none"
+        );
+        setMultiMetricResult(result);
+        setMcRunning(false);
+      }
+    }, 40);
+  }, [currentMaterial, selectedSub, bomEntry, sku, selectedTrigger]);
 
   useEffect(() => {
-    if (monteCarloEnabled && simComplete && costSim) runMonteCarlo();
-    else if (!monteCarloEnabled) { setMcData([]); setMcIterations(0); }
-  }, [monteCarloEnabled, simComplete, costSim, runMonteCarlo]);
+    if (monteCarloEnabled && simComplete && costSim) runMultiMetric();
+    else if (!monteCarloEnabled) { setMultiMetricResult(null); setMcProgress(0); }
+  }, [monteCarloEnabled, simComplete, costSim, runMultiMetric]);
+
+  // Save scenario
+  const handleSave = () => {
+    if (!scenarioName.trim() || !costSim || !multiMetricResult) return;
+    const newScenario: SavedScenario = {
+      id: `saved-${Date.now()}`,
+      name: scenarioName.trim(),
+      timestamp: new Date().toISOString(),
+      skuId: selectedSKU,
+      materialId: selectedMaterial,
+      substituteId: selectedSubstitute,
+      triggerId: selectedTrigger?.id || null,
+      triggerTitle: selectedTrigger?.title || null,
+      costSim,
+      multiMetric: multiMetricResult,
+    };
+    const updated = [...savedScenarios, newScenario];
+    setSavedScenarios(updated);
+    persistScenarios(updated);
+    setSaveDialogOpen(false);
+    setScenarioName("");
+  };
+
+  const deleteSaved = (id: string) => {
+    const updated = savedScenarios.filter(s => s.id !== id);
+    setSavedScenarios(updated);
+    persistScenarios(updated);
+    setCompareIds(prev => prev.filter(cid => cid !== id));
+  };
+
+  const toggleCompareId = (id: string) => {
+    setCompareIds(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
+  };
+
+  // Radar data for compare
+  const compareRadarData = useMemo(() => {
+    const selected = savedScenarios.filter(s => compareIds.includes(s.id));
+    if (selected.length === 0) return [];
+    const metrics: MetricKey[] = ["serviceLevel", "margin", "inventoryTurnover", "profitability", "timeToMake", "leadTime"];
+    return metrics.map(mk => {
+      const row: Record<string, string | number> = { metric: metricLabels[mk].label };
+      selected.forEach(s => {
+        // Normalize to 0-100 scale for radar
+        const val = s.multiMetric[mk].p50;
+        let normalized: number;
+        if (mk === "serviceLevel") normalized = val;
+        else if (mk === "margin") normalized = val * 2; // ~50% max
+        else if (mk === "inventoryTurnover") normalized = Math.max(0, 100 - val * 1.5);
+        else if (mk === "profitability") normalized = Math.min(100, val / 50);
+        else if (mk === "timeToMake") normalized = Math.max(0, 100 - val * 10);
+        else normalized = Math.max(0, 100 - val * 2); // leadTime
+        row[s.name] = +normalized.toFixed(1);
+      });
+      return row;
+    });
+  }, [compareIds, savedScenarios]);
+
+  const radarColors = ["hsl(213, 62%, 44%)", "hsl(160, 64%, 40%)", "hsl(38, 92%, 50%)", "hsl(0, 72%, 51%)", "hsl(270, 60%, 50%)"];
 
   const waterfallData = costSim ? [
     { name: "Formulation", value: -(costSim.original.formulation - costSim.substitute.formulation), fill: costSim.original.formulation > costSim.substitute.formulation ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
@@ -137,17 +277,6 @@ const SimulationEngine = () => {
     { name: "Warehouse", value: -(costSim.original.warehouse - costSim.substitute.warehouse), fill: costSim.original.warehouse > costSim.substitute.warehouse ? "hsl(160, 64%, 40%)" : "hsl(38, 92%, 50%)" },
   ] : [];
 
-  const mcStats = useMemo(() => {
-    if (!mcData.length || !costSim) return null;
-    return {
-      mean: costSim.substitute.total,
-      p5: mcData.find(d => d.cumPct >= 5)?.bin || "",
-      p50: mcData.find(d => d.cumPct >= 50)?.bin || "",
-      p95: mcData.find(d => d.cumPct >= 95)?.bin || "",
-    };
-  }, [mcData, costSim]);
-
-  // Find the best substitute for inline nudge
   const bestSub = substitutes.length > 0 ? substitutes[0] : null;
   const nudgeMessage = bestSub && currentMaterial
     ? `${bestSub.material.name} shows ${bestSub.similarity}% similarity to ${currentMaterial.name} at $${bestSub.material.costPerKg.toFixed(2)}/kg (vs $${currentMaterial.costPerKg.toFixed(2)}/kg). Risk score: ${bestSub.riskScore}%.`
@@ -157,7 +286,7 @@ const SimulationEngine = () => {
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <h1 className="text-2xl font-bold tracking-tight">Simulation Engine</h1>
-        <p className="text-sm text-muted-foreground mt-1">Material substitution analysis with full landed cost simulation</p>
+        <p className="text-sm text-muted-foreground mt-1">Scenario-driven simulation with multi-metric Monte Carlo analysis</p>
       </motion.div>
 
       {/* Filters */}
@@ -165,12 +294,94 @@ const SimulationEngine = () => {
         <GlobalFilters filters={filters} onChange={setFilters} />
       </motion.div>
 
+      {/* ===== SCENARIO TRIGGERS ===== */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="kpi-card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <h3 className="text-sm font-semibold">Scenario Triggers</h3>
+            <Badge variant="outline" className="text-[10px]">{scenarioTriggers.length} active</Badge>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {(["all", "macroeconomic", "supply_chain", "strategic", "demand"] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setScenarioFilter(cat)}
+                className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-all ${
+                  scenarioFilter === cat
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                {categoryLabels[cat]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {filteredTriggers.map(trigger => {
+            const IconComp = scenarioIcons[trigger.icon] || AlertTriangle;
+            const isSelected = selectedTrigger?.id === trigger.id;
+            return (
+              <button
+                key={trigger.id}
+                onClick={() => selectTrigger(trigger)}
+                className={`text-left p-3 rounded-lg border transition-all ${
+                  isSelected
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                    : "border-border hover:border-primary/30 hover:bg-muted/30"
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className={`p-1.5 rounded-md ${categoryColors[trigger.category]}`}>
+                    <IconComp className="h-3.5 w-3.5" />
+                  </div>
+                  <Badge className={`text-[9px] ${severityColors[trigger.severity]}`}>
+                    {trigger.severity}
+                  </Badge>
+                </div>
+                <p className="text-xs font-semibold mb-1 line-clamp-1">{trigger.title}</p>
+                <p className="text-[10px] text-muted-foreground line-clamp-2">{trigger.description}</p>
+                <div className="mt-2 flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground">{trigger.affectedSKUs.length} SKUs affected</span>
+                  <span className="text-[9px] text-muted-foreground/50">•</span>
+                  <span className="text-[9px] text-muted-foreground">{trigger.timestamp}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Context Banner */}
+      {selectedTrigger && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="rounded-lg border border-warning/30 bg-warning/5 p-3"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-warning mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-foreground">Simulating because: {selectedTrigger.title}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{selectedTrigger.recommendedAction}</p>
+              </div>
+            </div>
+            <button onClick={() => setSelectedTrigger(null)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Selection Controls */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="kpi-card">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Select SKU</label>
-            <Select value={selectedSKU} onValueChange={(v) => { setSelectedSKU(v); setSelectedMaterial(""); setSelectedSubstitute(""); setSimComplete(false); }}>
+            <Select value={selectedSKU} onValueChange={(v) => { setSelectedSKU(v); setSelectedMaterial(""); setSelectedSubstitute(""); setSimComplete(false); setMultiMetricResult(null); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {filteredSKUs.map(s => <SelectItem key={s.id} value={s.id}>{s.id} — {s.name}</SelectItem>)}
@@ -179,7 +390,7 @@ const SimulationEngine = () => {
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Select RM/PM</label>
-            <Select value={selectedMaterial} onValueChange={(v) => { setSelectedMaterial(v); setSelectedSubstitute(""); setSimComplete(false); }}>
+            <Select value={selectedMaterial} onValueChange={(v) => { setSelectedMaterial(v); setSelectedSubstitute(""); setSimComplete(false); setMultiMetricResult(null); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {skuMaterials.map(m => (
@@ -204,7 +415,7 @@ const SimulationEngine = () => {
         </div>
       </motion.div>
 
-      {/* Inline nudge for best substitute */}
+      {/* Inline nudge */}
       {nudgeMessage && !selectedSubstitute && (
         <InlineNudge
           variant="opportunity"
@@ -228,8 +439,6 @@ const SimulationEngine = () => {
                   <p className="font-semibold">Similarity Calculation</p>
                   <p className="font-mono text-[10px] bg-muted p-2 rounded">Score = Σ(wᵢ × |attr₁ᵢ - attr₂ᵢ| / rangeᵢ)</p>
                   <p>Weights: Viscosity (20%), Density (20%), pH (25%), Performance (35%)</p>
-                  <p className="font-semibold mt-2">Risk Score</p>
-                  <p className="font-mono text-[10px] bg-muted p-2 rounded">Risk = AttrVariance × HistFailRate × SupplierReliability</p>
                 </PopoverContent>
               </Popover>
             </div>
@@ -239,7 +448,7 @@ const SimulationEngine = () => {
             {substitutes.map(sub => (
               <button
                 key={sub.material.id}
-                onClick={() => { setSelectedSubstitute(sub.material.id); setSimComplete(false); }}
+                onClick={() => { setSelectedSubstitute(sub.material.id); setSimComplete(false); setMultiMetricResult(null); }}
                 className={`w-full text-left p-3 rounded-lg border transition-all ${
                   selectedSubstitute === sub.material.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
                 }`}
@@ -288,7 +497,7 @@ const SimulationEngine = () => {
             ) : (
               <>
                 <Zap className="h-4 w-4" />
-                Run Cost Simulation
+                Run Simulation
               </>
             )}
           </Button>
@@ -296,7 +505,7 @@ const SimulationEngine = () => {
             <Switch checked={monteCarloEnabled} onCheckedChange={setMonteCarloEnabled} />
             <div className="flex items-center gap-1.5">
               <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Monte Carlo</span>
+              <span className="text-xs font-medium text-muted-foreground">Multi-Metric Monte Carlo</span>
             </div>
           </div>
         </motion.div>
@@ -306,18 +515,12 @@ const SimulationEngine = () => {
       <AnimatePresence>
         {simComplete && costSim && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-            {/* Nudge on results */}
+            {/* Nudges */}
             {costSim.savings > 0 && selectedSub && selectedSub.riskScore < 3 && (
-              <InlineNudge
-                variant="opportunity"
-                message={`This substitution saves ${formatCurrency(costSim.savings)} annually with only ${selectedSub.riskScore}% risk. Consider fast-tracking through procurement approval.`}
-              />
+              <InlineNudge variant="opportunity" message={`This substitution saves ${formatCurrency(costSim.savings)} annually with only ${selectedSub.riskScore}% risk. Consider fast-tracking through procurement approval.`} />
             )}
             {costSim.savings < 0 && (
-              <InlineNudge
-                variant="warning"
-                message={`Despite lower material cost, increased logistics costs result in net margin erosion of ${formatCurrency(Math.abs(costSim.savings))}. Consider regional sourcing alternatives.`}
-              />
+              <InlineNudge variant="warning" message={`Despite lower material cost, increased logistics costs result in net margin erosion of ${formatCurrency(Math.abs(costSim.savings))}. Consider regional sourcing alternatives.`} />
             )}
 
             {/* Summary Cards */}
@@ -394,56 +597,112 @@ const SimulationEngine = () => {
               </div>
             </div>
 
-            {/* Monte Carlo */}
+            {/* ===== MULTI-METRIC MONTE CARLO ===== */}
             {monteCarloEnabled && (
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="kpi-card">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Activity className="h-4 w-4 text-primary" />
-                    <h3 className="text-sm font-semibold">Monte Carlo Risk Simulation</h3>
-                    <Badge variant="outline" className="text-[10px]">5,000 iterations</Badge>
+                    <h3 className="text-sm font-semibold">Multi-Metric Monte Carlo</h3>
+                    <Badge variant="outline" className="text-[10px]">5,000 iterations × 6 metrics</Badge>
+                    {selectedTrigger && (
+                      <Badge className={`text-[9px] ${severityColors[selectedTrigger.severity]}`}>
+                        {selectedTrigger.severity} scenario
+                      </Badge>
+                    )}
                   </div>
                   {mcRunning && (
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                      <span className="text-xs text-muted-foreground font-mono">{mcIterations.toLocaleString()} / 5,000</span>
+                      <span className="text-xs text-muted-foreground font-mono">{mcProgress}%</span>
                     </div>
                   )}
-                  {!mcRunning && mcData.length > 0 && <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Complete</Badge>}
+                  {!mcRunning && multiMetricResult && <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Complete</Badge>}
                 </div>
-                {mcData.length > 0 ? (
+
+                {multiMetricResult ? (
                   <div className="space-y-4">
-                    <ResponsiveContainer width="100%" height={220}>
-                      <AreaChart data={mcData}>
-                        <defs>
-                          <linearGradient id="mcGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.02} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
-                        <XAxis dataKey="bin" tick={{ fontSize: 9 }} stroke="hsl(215, 16%, 47%)" interval={4} />
-                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
-                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                        <Area type="monotone" dataKey="count" stroke="hsl(215, 70%, 50%)" fill="url(#mcGrad)" strokeWidth={2} />
-                        <ReferenceLine x={mcData[Math.floor(mcData.length / 2)]?.bin} stroke="hsl(38, 92%, 50%)" strokeDasharray="5 5" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                    {mcStats && (
-                      <div className="grid grid-cols-4 gap-3">
-                        {[
-                          { label: "P5 (Best)", value: mcStats.p5, color: "text-accent" },
-                          { label: "P50 (Median)", value: mcStats.p50, color: "text-foreground" },
-                          { label: "P95 (Worst)", value: mcStats.p95, color: "text-destructive" },
-                          { label: "Deterministic", value: formatCurrency(costSim.substitute.total), color: "text-foreground" },
-                        ].map(s => (
-                          <div key={s.label} className="p-2.5 rounded-lg bg-muted/50 text-center">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
-                            <p className={`text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {/* Metric tabs */}
+                    <Tabs value={activeMetricTab} onValueChange={v => setActiveMetricTab(v as MetricKey)}>
+                      <TabsList className="w-full grid grid-cols-6 h-auto">
+                        {(Object.keys(metricLabels) as MetricKey[]).map(mk => {
+                          const MIcon = metricIcons[mk];
+                          return (
+                            <TabsTrigger key={mk} value={mk} className="text-[10px] gap-1 py-1.5 px-1">
+                              <MIcon className="h-3 w-3" />
+                              <span className="hidden lg:inline">{metricLabels[mk].label}</span>
+                            </TabsTrigger>
+                          );
+                        })}
+                      </TabsList>
+
+                      {(Object.keys(metricLabels) as MetricKey[]).map(mk => {
+                        const dist = multiMetricResult[mk];
+                        const meta = metricLabels[mk];
+                        return (
+                          <TabsContent key={mk} value={mk} className="space-y-4">
+                            {/* Distribution chart */}
+                            <ResponsiveContainer width="100%" height={200}>
+                              <AreaChart data={dist.bins}>
+                                <defs>
+                                  <linearGradient id={`mcGrad-${mk}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="hsl(213, 62%, 44%)" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="hsl(213, 62%, 44%)" stopOpacity={0.02} />
+                                  </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
+                                <XAxis dataKey="bin" tick={{ fontSize: 8 }} stroke="hsl(215, 16%, 47%)" interval={Math.floor(dist.bins.length / 6)} />
+                                <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
+                                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                <Area type="monotone" dataKey="count" stroke="hsl(213, 62%, 44%)" fill={`url(#mcGrad-${mk})`} strokeWidth={2} />
+                              </AreaChart>
+                            </ResponsiveContainer>
+
+                            {/* P5 / P50 / P95 stats */}
+                            <div className="grid grid-cols-4 gap-3">
+                              {[
+                                { label: "P5 (Best)", value: `${dist.p5}${meta.unit}`, color: meta.higher === "better" ? "text-accent" : "text-destructive" },
+                                { label: "P50 (Median)", value: `${dist.p50}${meta.unit}`, color: "text-foreground" },
+                                { label: "P95 (Worst)", value: `${dist.p95}${meta.unit}`, color: meta.higher === "better" ? "text-destructive" : "text-accent" },
+                                { label: "Mean", value: `${dist.mean}${meta.unit}`, color: "text-foreground" },
+                              ].map(s => (
+                                <div key={s.label} className="p-2.5 rounded-lg bg-muted/50 text-center">
+                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
+                                  <p className={`text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </TabsContent>
+                        );
+                      })}
+                    </Tabs>
+
+                    {/* Radar summary */}
+                    <div className="border-t border-border/50 pt-4">
+                      <h4 className="text-xs font-semibold mb-3">P50 Metric Summary (Radar)</h4>
+                      <ResponsiveContainer width="100%" height={280}>
+                        <RadarChart data={(() => {
+                          const metrics: MetricKey[] = ["serviceLevel", "margin", "inventoryTurnover", "profitability", "timeToMake", "leadTime"];
+                          return metrics.map(mk => {
+                            const val = multiMetricResult[mk].p50;
+                            let normalized: number;
+                            if (mk === "serviceLevel") normalized = val;
+                            else if (mk === "margin") normalized = val * 2;
+                            else if (mk === "inventoryTurnover") normalized = Math.max(0, 100 - val * 1.5);
+                            else if (mk === "profitability") normalized = Math.min(100, val / 50);
+                            else if (mk === "timeToMake") normalized = Math.max(0, 100 - val * 10);
+                            else normalized = Math.max(0, 100 - val * 2);
+                            return { metric: metricLabels[mk].label, value: +normalized.toFixed(1), raw: `${val} ${metricLabels[mk].unit}` };
+                          });
+                        })()}>
+                          <PolarGrid stroke="hsl(214, 20%, 90%)" />
+                          <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
+                          <PolarRadiusAxis tick={{ fontSize: 9 }} stroke="hsl(215, 16%, 47%)" domain={[0, 100]} />
+                          <Radar name="Current Simulation" dataKey="value" stroke="hsl(213, 62%, 44%)" fill="hsl(213, 62%, 44%)" fillOpacity={0.2} strokeWidth={2} />
+                          <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-40">
@@ -452,9 +711,149 @@ const SimulationEngine = () => {
                 )}
               </motion.div>
             )}
+
+            {/* ===== SAVE & COMPARE ===== */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center gap-3">
+              {multiMetricResult && (
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setScenarioName(""); setSaveDialogOpen(true); }}>
+                  <Save className="h-3.5 w-3.5" />
+                  Save Scenario
+                </Button>
+              )}
+              {savedScenarios.length >= 2 && (
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCompareOpen(true)}>
+                  <GitCompare className="h-3.5 w-3.5" />
+                  Compare Scenarios ({savedScenarios.length})
+                </Button>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Save Dialog */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Save Scenario</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="e.g. LAS→AOS swap under commodity surge"
+              value={scenarioName}
+              onChange={e => setScenarioName(e.target.value)}
+              className="text-sm"
+            />
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p><strong>SKU:</strong> {sku.id} — {sku.name}</p>
+              <p><strong>Material:</strong> {currentMaterial?.name} → {selectedSub?.material.name}</p>
+              {selectedTrigger && <p><strong>Trigger:</strong> {selectedTrigger.title}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleSave} disabled={!scenarioName.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Compare Panel */}
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">Compare Saved Scenarios</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Scenario list */}
+            <div className="space-y-2">
+              {savedScenarios.map(s => {
+                const isChecked = compareIds.includes(s.id);
+                return (
+                  <div key={s.id} className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${isChecked ? "border-primary bg-primary/5" : "border-border"}`}>
+                    <label className="flex items-center gap-3 cursor-pointer flex-1">
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleCompareId(s.id)} className="rounded border-input" />
+                      <div>
+                        <p className="text-xs font-semibold">{s.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {s.skuId} • {materialMaster.find(m => m.id === s.materialId)?.name} → {materialMaster.find(m => m.id === s.substituteId)?.name}
+                          {s.triggerTitle && ` • ${s.triggerTitle}`}
+                        </p>
+                      </div>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-bold ${s.costSim.savings > 0 ? "text-accent" : "text-destructive"}`}>
+                        {s.costSim.savings > 0 ? "+" : ""}{formatCurrency(s.costSim.savings)}
+                      </span>
+                      <button onClick={() => deleteSaved(s.id)} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Comparison table */}
+            {compareIds.length >= 2 && (
+              <div className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 text-muted-foreground font-medium">Metric</th>
+                        {savedScenarios.filter(s => compareIds.includes(s.id)).map(s => (
+                          <th key={s.id} className="text-center py-2 font-semibold">{s.name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-border/50">
+                        <td className="py-2 text-muted-foreground">Annual Savings</td>
+                        {savedScenarios.filter(s => compareIds.includes(s.id)).map(s => (
+                          <td key={s.id} className={`text-center py-2 font-bold ${s.costSim.savings > 0 ? "text-accent" : "text-destructive"}`}>
+                            {formatCurrency(s.costSim.savings)}
+                          </td>
+                        ))}
+                      </tr>
+                      {(Object.keys(metricLabels) as MetricKey[]).map(mk => (
+                        <tr key={mk} className="border-b border-border/50">
+                          <td className="py-2 text-muted-foreground">{metricLabels[mk].label} (P50)</td>
+                          {savedScenarios.filter(s => compareIds.includes(s.id)).map(s => (
+                            <td key={s.id} className="text-center py-2 font-medium">
+                              {s.multiMetric[mk].p50}{metricLabels[mk].unit}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Radar overlay */}
+                <div>
+                  <h4 className="text-xs font-semibold mb-2">Radar Comparison</h4>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <RadarChart data={compareRadarData}>
+                      <PolarGrid stroke="hsl(214, 20%, 90%)" />
+                      <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
+                      <PolarRadiusAxis tick={{ fontSize: 9 }} stroke="hsl(215, 16%, 47%)" domain={[0, 100]} />
+                      {savedScenarios.filter(s => compareIds.includes(s.id)).map((s, idx) => (
+                        <Radar key={s.id} name={s.name} dataKey={s.name} stroke={radarColors[idx % radarColors.length]} fill={radarColors[idx % radarColors.length]} fillOpacity={0.1} strokeWidth={2} />
+                      ))}
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {compareIds.length < 2 && compareIds.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center">Select at least 2 scenarios to compare</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

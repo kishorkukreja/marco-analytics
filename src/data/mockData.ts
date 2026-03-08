@@ -359,6 +359,191 @@ export function computeHeuristicConfidence(heuristicData: ReturnType<typeof gene
   const withActuals = heuristicData.filter(d => d.actual !== null);
   if (withActuals.length === 0) return { total: 75, cocAlignment: 70, lyAlignment: 75, l2yAlignment: 72, biasStability: 78, volatility: 68 };
 
+  const cocErrors = withActuals.map(d => Math.abs((d.coc - d.actual!) / d.actual!));
+  const cocAlignment = Math.max(0, 100 - (cocErrors.reduce((a, b) => a + b, 0) / cocErrors.length) * 100 * 2);
+
+  const lyErrors = withActuals.map(d => Math.abs((d.ly - d.actual!) / d.actual!));
+  const lyAlignment = Math.max(0, 100 - (lyErrors.reduce((a, b) => a + b, 0) / lyErrors.length) * 100 * 2);
+
+  const l2yErrors = withActuals.map(d => Math.abs((d.l2y - d.actual!) / d.actual!));
+  const l2yAlignment = Math.max(0, 100 - (l2yErrors.reduce((a, b) => a + b, 0) / l2yErrors.length) * 100 * 2);
+
+  const biases = withActuals.map(d => (d.baseline - d.actual!) / d.actual!);
+  const avgBias = biases.reduce((a, b) => a + b, 0) / biases.length;
+  const biasVariance = biases.reduce((a, b) => a + Math.pow(b - avgBias, 2), 0) / biases.length;
+  const biasStability = Math.max(0, Math.min(100, 100 - biasVariance * 1000));
+
+  const diffs = withActuals.slice(1).map((d, i) => Math.abs(d.actual! - withActuals[i].actual!) / withActuals[i].actual!);
+  const avgVol = diffs.length > 0 ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0.1;
+  const volatility = Math.max(0, Math.min(100, 100 - avgVol * 200));
+
+  const total = +(cocAlignment * 0.25 + lyAlignment * 0.25 + l2yAlignment * 0.20 + biasStability * 0.15 + volatility * 0.15).toFixed(1);
+
+  return {
+    total,
+    cocAlignment: +cocAlignment.toFixed(1),
+    lyAlignment: +lyAlignment.toFixed(1),
+    l2yAlignment: +l2yAlignment.toFixed(1),
+    biasStability: +biasStability.toFixed(1),
+    volatility: +volatility.toFixed(1),
+  };
+}
+
+// ========== SCENARIO TRIGGERS ==========
+export type ScenarioCategory = "macroeconomic" | "supply_chain" | "strategic" | "demand";
+
+export interface ScenarioTrigger {
+  id: string;
+  category: ScenarioCategory;
+  title: string;
+  description: string;
+  severity: "critical" | "high" | "medium";
+  affectedSKUs: string[];
+  affectedMaterials: string[];
+  recommendedAction: string;
+  icon: string;
+  timestamp: string;
+}
+
+export const scenarioTriggers: ScenarioTrigger[] = [
+  { id: "SCN-001", category: "macroeconomic", title: "Commodity Price Surge", description: "Palm oil derivatives up 18% due to export restrictions in SE Asia. Direct impact on surfactant costs.", severity: "critical", affectedSKUs: ["SKU-001", "SKU-002", "SKU-003"], affectedMaterials: ["MAT-001", "MAT-002"], recommendedAction: "Evaluate AOS-based substitutes to hedge against LAS/SLES price volatility", icon: "TrendingUp", timestamp: "2h ago" },
+  { id: "SCN-002", category: "supply_chain", title: "Supplier Disruption — IndoChem", description: "IndoChem (India) facility shutdown due to regulatory compliance. Lead times extended 3x for Zeolite 4A and AOS.", severity: "critical", affectedSKUs: ["SKU-002", "SKU-005", "SKU-007"], affectedMaterials: ["MAT-005", "MAT-010"], recommendedAction: "Activate secondary supplier qualification for Zeolite and AOS materials", icon: "AlertTriangle", timestamp: "4h ago" },
+  { id: "SCN-003", category: "macroeconomic", title: "EUR/USD Currency Shift", description: "Euro weakened 6% vs USD. EMEA-sourced materials from Germany/Netherlands now relatively cheaper for NA operations.", severity: "medium", affectedSKUs: ["SKU-004", "SKU-007"], affectedMaterials: ["MAT-001", "MAT-004", "MAT-009"], recommendedAction: "Re-evaluate cross-regional sourcing to exploit currency arbitrage", icon: "DollarSign", timestamp: "1d ago" },
+  { id: "SCN-004", category: "supply_chain", title: "Port Congestion — Rotterdam", description: "Major delays at Rotterdam port affecting all EMEA inbound shipments. Average +12 days to lead times.", severity: "high", affectedSKUs: ["SKU-001", "SKU-002", "SKU-006"], affectedMaterials: ["MAT-007"], recommendedAction: "Switch to air freight for critical materials or source from alternate ports", icon: "Ship", timestamp: "6h ago" },
+  { id: "SCN-005", category: "strategic", title: "Margin Recovery Initiative", description: "Corporate mandate to recover 200bps margin across Laundry portfolio by Q4. Requires reformulation or sourcing changes.", severity: "high", affectedSKUs: ["SKU-001", "SKU-002", "SKU-006"], affectedMaterials: ["MAT-001", "MAT-003", "MAT-005"], recommendedAction: "Run full substitution analysis on top-3 cost contributors in Laundry BOM", icon: "Target", timestamp: "3d ago" },
+  { id: "SCN-006", category: "strategic", title: "Sustainability Reformulation", description: "2026 target: 40% bio-based surfactants across Personal Care. Current mix at 12%.", severity: "medium", affectedSKUs: ["SKU-004", "SKU-008"], affectedMaterials: ["MAT-002", "MAT-003"], recommendedAction: "Identify bio-based alternatives for SLES and Cocamidopropyl Betaine", icon: "Leaf", timestamp: "1w ago" },
+  { id: "SCN-007", category: "demand", title: "Forecast Deviation — APAC Spike", description: "Actual demand for FreshGlow Dishwash exceeded forecast by 22% in Q1. Risk of stockout if trend continues.", severity: "high", affectedSKUs: ["SKU-003", "SKU-008"], affectedMaterials: ["MAT-002", "MAT-006"], recommendedAction: "Increase safety stock and evaluate faster-lead-time supplier alternatives", icon: "BarChart3", timestamp: "12h ago" },
+  { id: "SCN-008", category: "demand", title: "New Channel Launch — D2C", description: "Direct-to-consumer channel launching Q3 for Personal Care. Requires adjusted pack sizes and separate BOM costing.", severity: "medium", affectedSKUs: ["SKU-004", "SKU-008"], affectedMaterials: ["MAT-003", "MAT-008"], recommendedAction: "Simulate D2C-specific BOM configurations with smaller pack sizes", icon: "Store", timestamp: "5d ago" },
+];
+
+// ========== MULTI-METRIC MONTE CARLO ==========
+export type MetricKey = "serviceLevel" | "margin" | "inventoryTurnover" | "profitability" | "timeToMake" | "leadTime";
+
+export interface MetricDistribution {
+  bins: { bin: string; count: number; cumPct: number }[];
+  p5: number;
+  p50: number;
+  p95: number;
+  mean: number;
+  unit: string;
+}
+
+export interface MultiMetricResult {
+  serviceLevel: MetricDistribution;
+  margin: MetricDistribution;
+  inventoryTurnover: MetricDistribution;
+  profitability: MetricDistribution;
+  timeToMake: MetricDistribution;
+  leadTime: MetricDistribution;
+}
+
+export const metricLabels: Record<MetricKey, { label: string; unit: string; higher: "better" | "worse" }> = {
+  serviceLevel: { label: "Service Level", unit: "%", higher: "better" },
+  margin: { label: "Gross Margin", unit: "%", higher: "better" },
+  inventoryTurnover: { label: "Inventory Turnover", unit: "days", higher: "worse" },
+  profitability: { label: "Net Profitability", unit: "$K", higher: "better" },
+  timeToMake: { label: "Time to Make", unit: "days", higher: "worse" },
+  leadTime: { label: "Lead Time", unit: "days", higher: "worse" },
+};
+
+function boxMuller(): number {
+  return Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+}
+
+function buildDistribution(values: number[], unit: string, decimals = 1): MetricDistribution {
+  values.sort((a, b) => a - b);
+  const N = values.length;
+  const min = values[0], max = values[N - 1];
+  const bins = 25;
+  const binWidth = (max - min) / bins;
+  const histogram: MetricDistribution["bins"] = [];
+  let cum = 0;
+  for (let i = 0; i < bins; i++) {
+    const lo = min + i * binWidth;
+    const count = values.filter(r => r >= lo && r < lo + binWidth).length;
+    cum += count;
+    histogram.push({ bin: `${lo.toFixed(decimals)}`, count, cumPct: Math.round((cum / N) * 100) });
+  }
+  const mean = values.reduce((a, b) => a + b, 0) / N;
+  return {
+    bins: histogram,
+    p5: +values[Math.floor(N * 0.05)].toFixed(decimals),
+    p50: +values[Math.floor(N * 0.5)].toFixed(decimals),
+    p95: +values[Math.floor(N * 0.95)].toFixed(decimals),
+    mean: +mean.toFixed(decimals),
+    unit,
+  };
+}
+
+export function simulateMultiMetric(
+  sku: SKU,
+  originalMat: Material,
+  substituteMat: Material,
+  compositionPct: number,
+  scenarioSeverity: "critical" | "high" | "medium" | "none" = "none"
+): MultiMetricResult {
+  const N = 5000;
+  const severityMultiplier = scenarioSeverity === "critical" ? 1.8 : scenarioSeverity === "high" ? 1.4 : scenarioSeverity === "medium" ? 1.15 : 1.0;
+
+  const subSupplier = supplierMaster.find(s => s.id === substituteMat.supplierId)!;
+  const baseCostDelta = (substituteMat.costPerKg - originalMat.costPerKg) / originalMat.costPerKg;
+
+  // Service Level: base ~95%, impacted by supplier reliability and scenario
+  const slBase = subSupplier.reliabilityScore * 0.98;
+  const slVol = (100 - subSupplier.reliabilityScore) * 0.15 * severityMultiplier;
+  const slValues = Array.from({ length: N }, () => Math.min(100, Math.max(50, slBase + boxMuller() * slVol)));
+
+  // Margin: base from sku margin, adjusted by cost delta
+  const marginBase = sku.currentMargin + (baseCostDelta * -compositionPct * 0.5);
+  const marginVol = 2.5 * severityMultiplier;
+  const marginValues = Array.from({ length: N }, () => +(marginBase + boxMuller() * marginVol).toFixed(1));
+
+  // Inventory Turnover (days): base ~30 days, higher lead time = more days
+  const turnBase = 25 + subSupplier.leadTimeDays * 0.5 * severityMultiplier;
+  const turnVol = 5 * severityMultiplier;
+  const turnValues = Array.from({ length: N }, () => Math.max(5, +(turnBase + boxMuller() * turnVol).toFixed(0)));
+
+  // Profitability: revenue * margin impact
+  const profitBase = (sku.revenue / 1000) * (marginBase / 100);
+  const profitVol = profitBase * 0.08 * severityMultiplier;
+  const profitValues = Array.from({ length: N }, () => +(profitBase + boxMuller() * profitVol).toFixed(0));
+
+  // Time to Make: base ~5 days, impacted by material change
+  const ttmBase = 4.5 + Math.abs(originalMat.viscosity - substituteMat.viscosity) * 0.005 * severityMultiplier;
+  const ttmVol = 0.8 * severityMultiplier;
+  const ttmValues = Array.from({ length: N }, () => Math.max(1, +(ttmBase + boxMuller() * ttmVol).toFixed(1)));
+
+  // Lead Time: base from supplier, increased by scenario
+  const ltBase = subSupplier.leadTimeDays * severityMultiplier;
+  const ltVol = subSupplier.leadTimeDays * 0.2 * severityMultiplier;
+  const ltValues = Array.from({ length: N }, () => Math.max(1, +(ltBase + boxMuller() * ltVol).toFixed(0)));
+
+  return {
+    serviceLevel: buildDistribution(slValues, "%"),
+    margin: buildDistribution(marginValues, "%"),
+    inventoryTurnover: buildDistribution(turnValues, "days", 0),
+    profitability: buildDistribution(profitValues, "$K", 0),
+    timeToMake: buildDistribution(ttmValues, "days"),
+    leadTime: buildDistribution(ltValues, "days", 0),
+  };
+}
+
+// ========== SAVED SCENARIOS ==========
+export interface SavedScenario {
+  id: string;
+  name: string;
+  timestamp: string;
+  skuId: string;
+  materialId: string;
+  substituteId: string;
+  triggerId: string | null;
+  triggerTitle: string | null;
+  costSim: ReturnType<typeof simulateLandedCost>;
+  multiMetric: MultiMetricResult;
+}
+  const withActuals = heuristicData.filter(d => d.actual !== null);
+  if (withActuals.length === 0) return { total: 75, cocAlignment: 70, lyAlignment: 75, l2yAlignment: 72, biasStability: 78, volatility: 68 };
+
   // CoC alignment: how close CoC heuristic is to actual
   const cocErrors = withActuals.map(d => Math.abs((d.coc - d.actual!) / d.actual!));
   const cocAlignment = Math.max(0, 100 - (cocErrors.reduce((a, b) => a + b, 0) / cocErrors.length) * 100 * 2);
