@@ -1,15 +1,20 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FlaskConical, ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity } from "lucide-react";
+import { ArrowRight, AlertTriangle, CheckCircle2, Info, Zap, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { GlobalFilters, FilterState, defaultFilters, filterSKUs } from "@/components/shared/GlobalFilters";
+import { InlineNudge } from "@/components/shared/InlineNudge";
 import { skuMaster, materialMaster, bomTable, supplierMaster, calculateSimilarity, calculateRiskScore, simulateLandedCost } from "@/data/mockData";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, ReferenceLine } from "recharts";
 
 const SimulationEngine = () => {
+  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const filteredSKUs = useMemo(() => filterSKUs(filters), [filters]);
+
   const [selectedSKU, setSelectedSKU] = useState(skuMaster[0].id);
   const [selectedMaterial, setSelectedMaterial] = useState("");
   const [selectedSubstitute, setSelectedSubstitute] = useState("");
@@ -32,8 +37,18 @@ const SimulationEngine = () => {
     }
   }, [selectedSKU]);
 
+  // Reset SKU selection when filters change
+  useEffect(() => {
+    if (filteredSKUs.length > 0 && !filteredSKUs.find(s => s.id === selectedSKU)) {
+      setSelectedSKU(filteredSKUs[0].id);
+      setSelectedMaterial("");
+      setSelectedSubstitute("");
+      setSimComplete(false);
+    }
+  }, [filteredSKUs]);
+
   const currentMaterial = materialMaster.find(m => m.id === selectedMaterial);
-  
+
   const substitutes = useMemo(() => {
     if (!currentMaterial) return [];
     return materialMaster
@@ -65,84 +80,52 @@ const SimulationEngine = () => {
     }, 800);
   };
 
-  // Monte Carlo Simulation
+  // Monte Carlo
   const runMonteCarlo = useCallback(() => {
     if (!costSim) return;
     setMcRunning(true);
     setMcIterations(0);
     setMcData([]);
-
-    const totalCost = costSim.substitute.total;
     const N = 5000;
     const results: number[] = [];
-
-    // Simulate cost variations with normal distribution (Box-Muller)
     for (let i = 0; i < N; i++) {
-      const u1 = Math.random();
-      const u2 = Math.random();
-      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-      // Material cost ±12%, freight ±18%, duty ±8%, packaging ±5%
-      const matVar = 1 + z * 0.12;
+      const z1 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
       const z2 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const freightVar = 1 + z2 * 0.18;
       const z3 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const dutyVar = 1 + z3 * 0.08;
       const z4 = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
-      const pkgVar = 1 + z4 * 0.05;
-
-      const simCost =
-        costSim.substitute.formulation * matVar +
-        costSim.substitute.freight * freightVar +
-        costSim.substitute.duty * dutyVar +
-        costSim.substitute.packaging * pkgVar +
-        costSim.substitute.manufacturing +
-        costSim.substitute.warehouse;
-      results.push(simCost);
+      results.push(
+        costSim.substitute.formulation * (1 + z1 * 0.12) +
+        costSim.substitute.freight * (1 + z2 * 0.18) +
+        costSim.substitute.duty * (1 + z3 * 0.08) +
+        costSim.substitute.packaging * (1 + z4 * 0.05) +
+        costSim.substitute.manufacturing + costSim.substitute.warehouse
+      );
     }
-
     results.sort((a, b) => a - b);
-    const min = results[0];
-    const max = results[results.length - 1];
-    const bins = 30;
-    const binWidth = (max - min) / bins;
-    const histogram: { bin: string; count: number; cumPct: number }[] = [];
-    let cumulative = 0;
-
+    const min = results[0], max = results[results.length - 1];
+    const bins = 30, binWidth = (max - min) / bins;
+    const histogram: typeof mcData = [];
+    let cum = 0;
     for (let i = 0; i < bins; i++) {
       const lo = min + i * binWidth;
-      const hi = lo + binWidth;
-      const count = results.filter(r => r >= lo && r < hi).length;
-      cumulative += count;
-      histogram.push({
-        bin: `$${(lo / 1000).toFixed(0)}K`,
-        count,
-        cumPct: Math.round((cumulative / N) * 100),
-      });
+      const count = results.filter(r => r >= lo && r < lo + binWidth).length;
+      cum += count;
+      histogram.push({ bin: `$${(lo / 1000).toFixed(0)}K`, count, cumPct: Math.round((cum / N) * 100) });
     }
-
-    // Animate iteration counter
     let iter = 0;
     const step = Math.ceil(N / 20);
     const interval = setInterval(() => {
       iter += step;
-      if (iter >= N) {
-        iter = N;
-        clearInterval(interval);
-        setMcRunning(false);
-        setMcData(histogram);
-      }
+      if (iter >= N) { iter = N; clearInterval(interval); setMcRunning(false); setMcData(histogram); }
       setMcIterations(iter);
     }, 50);
   }, [costSim]);
 
   useEffect(() => {
-    if (monteCarloEnabled && simComplete && costSim) {
-      runMonteCarlo();
-    } else if (!monteCarloEnabled) {
-      setMcData([]);
-      setMcIterations(0);
-    }
+    if (monteCarloEnabled && simComplete && costSim) runMonteCarlo();
+    else if (!monteCarloEnabled) { setMcData([]); setMcIterations(0); }
   }, [monteCarloEnabled, simComplete, costSim, runMonteCarlo]);
+
   const waterfallData = costSim ? [
     { name: "Formulation", value: -(costSim.original.formulation - costSim.substitute.formulation), fill: costSim.original.formulation > costSim.substitute.formulation ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Freight", value: -(costSim.original.freight - costSim.substitute.freight), fill: costSim.original.freight > costSim.substitute.freight ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
@@ -151,21 +134,32 @@ const SimulationEngine = () => {
     { name: "Warehouse", value: -(costSim.original.warehouse - costSim.substitute.warehouse), fill: costSim.original.warehouse > costSim.substitute.warehouse ? "hsl(160, 64%, 40%)" : "hsl(38, 92%, 50%)" },
   ] : [];
 
-  // Monte Carlo stats
   const mcStats = useMemo(() => {
     if (!mcData.length || !costSim) return null;
-    const totalCost = costSim.substitute.total;
-    const p5 = mcData.find(d => d.cumPct >= 5);
-    const p50 = mcData.find(d => d.cumPct >= 50);
-    const p95 = mcData.find(d => d.cumPct >= 95);
-    return { mean: totalCost, p5: p5?.bin || "", p50: p50?.bin || "", p95: p95?.bin || "" };
+    return {
+      mean: costSim.substitute.total,
+      p5: mcData.find(d => d.cumPct >= 5)?.bin || "",
+      p50: mcData.find(d => d.cumPct >= 50)?.bin || "",
+      p95: mcData.find(d => d.cumPct >= 95)?.bin || "",
+    };
   }, [mcData, costSim]);
+
+  // Find the best substitute for inline nudge
+  const bestSub = substitutes.length > 0 ? substitutes[0] : null;
+  const nudgeMessage = bestSub && currentMaterial
+    ? `${bestSub.material.name} shows ${bestSub.similarity}% similarity to ${currentMaterial.name} at $${bestSub.material.costPerKg.toFixed(2)}/kg (vs $${currentMaterial.costPerKg.toFixed(2)}/kg). Risk score: ${bestSub.riskScore}%.`
+    : null;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <h1 className="text-2xl font-bold tracking-tight">Simulation Engine</h1>
         <p className="text-sm text-muted-foreground mt-1">Material substitution analysis with full landed cost simulation</p>
+      </motion.div>
+
+      {/* Filters */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="kpi-card !p-3">
+        <GlobalFilters filters={filters} onChange={setFilters} />
       </motion.div>
 
       {/* Selection Controls */}
@@ -176,16 +170,20 @@ const SimulationEngine = () => {
             <Select value={selectedSKU} onValueChange={(v) => { setSelectedSKU(v); setSelectedMaterial(""); setSelectedSubstitute(""); setSimComplete(false); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {skuMaster.map(s => <SelectItem key={s.id} value={s.id}>{s.id} — {s.name}</SelectItem>)}
+                {filteredSKUs.map(s => <SelectItem key={s.id} value={s.id}>{s.id} — {s.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Select Material</label>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Select RM/PM</label>
             <Select value={selectedMaterial} onValueChange={(v) => { setSelectedMaterial(v); setSelectedSubstitute(""); setSimComplete(false); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {skuMaterials.map(m => <SelectItem key={m.materialId} value={m.materialId}>{m.material.id} — {m.material.name} ({m.compositionPct}%)</SelectItem>)}
+                {skuMaterials.map(m => (
+                  <SelectItem key={m.materialId} value={m.materialId}>
+                    {m.material.id} — {m.material.name} ({m.compositionPct}%)
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -203,18 +201,28 @@ const SimulationEngine = () => {
         </div>
       </motion.div>
 
-      {/* Similarity Results */}
+      {/* Inline nudge for best substitute */}
+      {nudgeMessage && !selectedSubstitute && (
+        <InlineNudge
+          variant="opportunity"
+          message={nudgeMessage}
+          action="Select this substitute"
+          onAction={() => bestSub && setSelectedSubstitute(bestSub.material.id)}
+        />
+      )}
+
+      {/* Substitutes */}
       {currentMaterial && substitutes.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="kpi-card">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold">Material Substitutes</h3>
+              <h3 className="text-sm font-semibold">Alternate RM/PM Options</h3>
               <Popover>
                 <PopoverTrigger asChild>
                   <button className="text-muted-foreground hover:text-foreground"><Info className="h-3.5 w-3.5" /></button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80 text-xs space-y-2">
-                  <p className="font-semibold">How Similarity is Calculated</p>
+                  <p className="font-semibold">Similarity Calculation</p>
                   <p className="font-mono text-[10px] bg-muted p-2 rounded">Score = Σ(wᵢ × |attr₁ᵢ - attr₂ᵢ| / rangeᵢ)</p>
                   <p>Weights: Viscosity (20%), Density (20%), pH (25%), Performance (35%)</p>
                   <p className="font-semibold mt-2">Risk Score</p>
@@ -222,7 +230,7 @@ const SimulationEngine = () => {
                 </PopoverContent>
               </Popover>
             </div>
-            <span className="text-xs text-muted-foreground">Showing {substitutes.length} compatible materials</span>
+            <span className="text-xs text-muted-foreground">{substitutes.length} compatible materials found</span>
           </div>
           <div className="space-y-2">
             {substitutes.map(sub => (
@@ -234,11 +242,9 @@ const SimulationEngine = () => {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{sub.material.name}</span>
-                      <span className="text-xs text-muted-foreground">{sub.material.id} • {sub.supplier.name} ({sub.supplier.country})</span>
-                    </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{sub.material.name}</span>
+                    <span className="text-xs text-muted-foreground">{sub.material.id} • {sub.supplier.name} ({sub.supplier.country})</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
@@ -293,10 +299,24 @@ const SimulationEngine = () => {
         </motion.div>
       )}
 
-      {/* Simulation Results */}
+      {/* Results */}
       <AnimatePresence>
         {simComplete && costSim && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            {/* Nudge on results */}
+            {costSim.savings > 0 && selectedSub && selectedSub.riskScore < 3 && (
+              <InlineNudge
+                variant="opportunity"
+                message={`This substitution saves ${formatCurrency(costSim.savings)} annually with only ${selectedSub.riskScore}% risk. Consider fast-tracking through procurement approval.`}
+              />
+            )}
+            {costSim.savings < 0 && (
+              <InlineNudge
+                variant="warning"
+                message={`Despite lower material cost, increased logistics costs result in net margin erosion of ${formatCurrency(Math.abs(costSim.savings))}. Consider regional sourcing alternatives.`}
+              />
+            )}
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="kpi-card border-accent/30">
@@ -326,7 +346,7 @@ const SimulationEngine = () => {
             {/* Cost Breakdown */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="kpi-card">
-                <h3 className="text-sm font-semibold mb-3">Cost Breakdown Comparison</h3>
+                <h3 className="text-sm font-semibold mb-3">Cost Breakdown — Current vs Substitute</h3>
                 <div className="space-y-2">
                   {(["formulation", "freight", "duty", "warehouse", "manufacturing", "packaging"] as const).map(key => (
                     <div key={key} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
@@ -355,39 +375,23 @@ const SimulationEngine = () => {
                 </div>
               </div>
 
-              {/* Waterfall */}
               <div className="kpi-card">
                 <h3 className="text-sm font-semibold mb-3">Cost Impact Waterfall</h3>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={waterfallData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
-                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" tickFormatter={v => `$${(v/1000).toFixed(0)}K`} />
+                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => formatCurrency(Math.abs(v))} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {waterfallData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
+                      {waterfallData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-
-                {/* Edge case: margin erosion */}
-                {costSim.savings < 0 && (
-                  <div className="mt-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold text-destructive">Margin Erosion Detected</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">While material cost is lower, increased logistics and duty costs result in net margin erosion of {formatCurrency(Math.abs(costSim.savings))} annually.</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Monte Carlo Risk Simulation */}
+            {/* Monte Carlo */}
             {monteCarloEnabled && (
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="kpi-card">
                 <div className="flex items-center justify-between mb-4">
@@ -402,66 +406,45 @@ const SimulationEngine = () => {
                       <span className="text-xs text-muted-foreground font-mono">{mcIterations.toLocaleString()} / 5,000</span>
                     </div>
                   )}
-                  {!mcRunning && mcData.length > 0 && (
-                    <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Complete</Badge>
-                  )}
+                  {!mcRunning && mcData.length > 0 && <Badge className="bg-accent/10 text-accent border-accent/20 text-[10px]">Complete</Badge>}
                 </div>
-
                 {mcData.length > 0 ? (
                   <div className="space-y-4">
                     <ResponsiveContainer width="100%" height={220}>
                       <AreaChart data={mcData}>
                         <defs>
-                          <linearGradient id="mcGradient" x1="0" y1="0" x2="0" y2="1">
+                          <linearGradient id="mcGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.3} />
                             <stop offset="95%" stopColor="hsl(215, 70%, 50%)" stopOpacity={0.02} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
                         <XAxis dataKey="bin" tick={{ fontSize: 9 }} stroke="hsl(215, 16%, 47%)" interval={4} />
-                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" label={{ value: "Frequency", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "hsl(215, 16%, 47%)" } }} />
-                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number, name: string) => [name === "count" ? `${v} simulations` : `${v}%`, name === "count" ? "Frequency" : "Cumulative %"]} />
-                        <Area type="monotone" dataKey="count" stroke="hsl(215, 70%, 50%)" fill="url(#mcGradient)" strokeWidth={2} />
-                        {costSim && (
-                          <ReferenceLine x={mcData[Math.floor(mcData.length / 2)]?.bin} stroke="hsl(38, 92%, 50%)" strokeDasharray="5 5" label={{ value: "P50", position: "top", style: { fontSize: 10, fill: "hsl(38, 92%, 50%)" } }} />
-                        )}
+                        <YAxis tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
+                        <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                        <Area type="monotone" dataKey="count" stroke="hsl(215, 70%, 50%)" fill="url(#mcGrad)" strokeWidth={2} />
+                        <ReferenceLine x={mcData[Math.floor(mcData.length / 2)]?.bin} stroke="hsl(38, 92%, 50%)" strokeDasharray="5 5" />
                       </AreaChart>
                     </ResponsiveContainer>
-
-                    {/* Stats row */}
                     {mcStats && (
                       <div className="grid grid-cols-4 gap-3">
-                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P5 (Best Case)</p>
-                          <p className="text-sm font-bold text-accent mt-0.5">{mcStats.p5}</p>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P50 (Median)</p>
-                          <p className="text-sm font-bold text-foreground mt-0.5">{mcStats.p50}</p>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">P95 (Worst Case)</p>
-                          <p className="text-sm font-bold text-destructive mt-0.5">{mcStats.p95}</p>
-                        </div>
-                        <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Deterministic</p>
-                          <p className="text-sm font-bold text-foreground mt-0.5">{formatCurrency(costSim.substitute.total)}</p>
-                        </div>
+                        {[
+                          { label: "P5 (Best)", value: mcStats.p5, color: "text-accent" },
+                          { label: "P50 (Median)", value: mcStats.p50, color: "text-foreground" },
+                          { label: "P95 (Worst)", value: mcStats.p95, color: "text-destructive" },
+                          { label: "Deterministic", value: formatCurrency(costSim.substitute.total), color: "text-foreground" },
+                        ].map(s => (
+                          <div key={s.label} className="p-2.5 rounded-lg bg-muted/50 text-center">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
+                            <p className={`text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+                          </div>
+                        ))}
                       </div>
                     )}
-
-                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
-                      <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        <span className="font-semibold text-foreground">Interpretation:</span> Based on 5,000 Monte Carlo iterations with stochastic variation across material costs (±12%), freight (±18%), duties (±8%), and packaging (±5%), the probability distribution shows the range of possible total landed costs. The P5–P95 band represents the 90% confidence interval for cost outcomes.
-                      </p>
-                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-40">
-                    <div className="text-center">
-                      <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-2" />
-                      <p className="text-xs text-muted-foreground">Running simulations...</p>
-                    </div>
+                    <div className="h-8 w-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                   </div>
                 )}
               </motion.div>
