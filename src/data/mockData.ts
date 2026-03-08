@@ -696,14 +696,3 @@ export interface SavedScenario {
   costSim: ReturnType<typeof simulateLandedCost>;
   multiMetric: MultiMetricResult;
 }
-  id: string;
-  name: string;
-  timestamp: string;
-  skuId: string;
-  materialId: string;
-  substituteId: string;
-  triggerId: string | null;
-  triggerTitle: string | null;
-  costSim: ReturnType<typeof simulateLandedCost>;
-  multiMetric: MultiMetricResult;
-}
