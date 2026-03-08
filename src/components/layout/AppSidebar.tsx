@@ -1,4 +1,4 @@
-import { BarChart3, Cpu, FlaskConical, BrainCircuit, ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { BarChart3, Cpu, FlaskConical, BrainCircuit, ChevronLeft, ChevronRight, Zap, Microscope } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
