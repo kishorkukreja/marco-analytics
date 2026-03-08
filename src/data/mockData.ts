@@ -528,8 +528,174 @@ export function simulateMultiMetric(
   };
 }
 
+// ========== FORECAST METRICS (per SKU) ==========
+export interface SKUForecastMetrics {
+  skuId: string;
+  accuracy: number;
+  bias: number;
+  volatility: number;
+  cocChange: number;
+  lyChange: number;
+  runRate: number;
+  runRateChange: number;
+  flags: string[];
+}
+
+export function computeSKUForecastMetrics(skuId: string): SKUForecastMetrics {
+  const records = forecastData.filter(f => f.skuId === skuId);
+  const withActuals = records.filter(r => r.actualDemand !== null);
+  
+  if (withActuals.length < 2) {
+    return { skuId, accuracy: 85, bias: 0, volatility: 5, cocChange: 0, lyChange: 0, runRate: 0, runRateChange: 0, flags: [] };
+  }
+
+  // Accuracy: MAPE-based
+  const apes = withActuals.map(r => Math.abs((r.baselineForecast - r.actualDemand!) / r.actualDemand!));
+  const mape = apes.reduce((a, b) => a + b, 0) / apes.length;
+  const accuracy = +(Math.max(0, (1 - mape) * 100)).toFixed(1);
+
+  // Bias: mean percentage error (positive = over-forecast)
+  const biases = withActuals.map(r => (r.baselineForecast - r.actualDemand!) / r.actualDemand!);
+  const bias = +(biases.reduce((a, b) => a + b, 0) / biases.length * 100).toFixed(1);
+
+  // Volatility: CoV of actuals
+  const actuals = withActuals.map(r => r.actualDemand!);
+  const mean = actuals.reduce((a, b) => a + b, 0) / actuals.length;
+  const std = Math.sqrt(actuals.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / actuals.length);
+  const volatility = +(std / mean * 100).toFixed(1);
+
+  // Run rate: last 3 months average
+  const last3 = withActuals.slice(-3);
+  const runRate = Math.round(last3.reduce((a, r) => a + r.actualDemand!, 0) / last3.length);
+  const prev3 = withActuals.slice(-6, -3);
+  const prevRunRate = prev3.length > 0 ? prev3.reduce((a, r) => a + r.actualDemand!, 0) / prev3.length : runRate;
+  const runRateChange = +((runRate - prevRunRate) / prevRunRate * 100).toFixed(1);
+
+  // CoC and LY changes
+  const latest = records[records.length - 1];
+  const prevRecord = records.length > 1 ? records[records.length - 2] : latest;
+  const cocChange = +((latest.baselineForecast - prevRecord.baselineForecast) / prevRecord.baselineForecast * 100).toFixed(1);
+  const lyRecord = records.length > 12 ? records[records.length - 13] : latest;
+  const lyChange = +((latest.baselineForecast - lyRecord.baselineForecast) / lyRecord.baselineForecast * 100).toFixed(1);
+
+  // Flags
+  const flags: string[] = [];
+  if (Math.abs(runRateChange) > 10) flags.push("volatile_run_rate");
+  if (accuracy < 80) flags.push("low_accuracy");
+  if (Math.abs(bias) > 5) flags.push("bias_detected");
+  const sku = skuMaster.find(s => s.id === skuId);
+  if (sku && sku.currentMargin > 35) flags.push("high_margin");
+
+  return { skuId, accuracy, bias, volatility, cocChange, lyChange, runRate, runRateChange, flags };
+}
+
+export function computeAllSKUMetrics(): SKUForecastMetrics[] {
+  return skuMaster.map(s => computeSKUForecastMetrics(s.id));
+}
+
+export function generateAgentNarratives(skuId: string) {
+  const sku = skuMaster.find(s => s.id === skuId)!;
+  const metrics = computeSKUForecastMetrics(skuId);
+  const hData = generateHeuristicForecast(skuId);
+  const confidence = computeHeuristicConfidence(hData);
+  const withActuals = hData.filter(d => d.actual !== null);
+  const anomalies = hData.filter(d => d.anomalyFlag);
+
+  const bestHeuristic = confidence.cocAlignment >= confidence.lyAlignment && confidence.cocAlignment >= confidence.l2yAlignment
+    ? "CoC" : confidence.lyAlignment >= confidence.l2yAlignment ? "LY" : "L2Y";
+  const bestAlignment = bestHeuristic === "CoC" ? confidence.cocAlignment : bestHeuristic === "LY" ? confidence.lyAlignment : confidence.l2yAlignment;
+
+  // Movement Analysis
+  const movement = {
+    title: "Movement Analysis",
+    content: `${sku.name} forecast shows a ${metrics.cocChange > 0 ? "+" : ""}${metrics.cocChange}% CoC change (${metrics.cocChange > 0 ? "+" : ""}${Math.round(metrics.runRate * Math.abs(metrics.cocChange) / 100).toLocaleString()} cases) vs last period. Year-over-year change is ${metrics.lyChange > 0 ? "+" : ""}${metrics.lyChange}%. ${Math.abs(metrics.cocChange) > 5 ? `The bulk of the ${metrics.cocChange > 0 ? "uplift" : "decline"} is concentrated in the next 13 weeks, with ${metrics.cocChange > 0 ? "summer" : "Q4"} periods showing the most significant shifts.` : "Movement is within normal operational bounds across the horizon."} Current run-rate: ${metrics.runRate.toLocaleString()} cases/month (${metrics.runRateChange > 0 ? "+" : ""}${metrics.runRateChange}% vs prior 3 months).`,
+  };
+
+  // Key Drivers
+  const drivers = {
+    title: "Key Drivers",
+    content: `${anomalies.length} forecast units exceed ±2% CoC threshold at the SKU level. ${anomalies.length > 3 ? `Key driver: ${sku.channel} channel demand for ${sku.brand} ${sku.category.toLowerCase()} shifted ${metrics.cocChange > 0 ? "upward" : "downward"} in ${sku.region}, with the change concentrated around seasonal promotion windows.` : "Deviations are minor and distributed across periods without clear concentration."} SKUs deviating from seasonal pattern (watchlist): ${sku.id} in months ${anomalies.slice(0, 3).map(a => a.month).join(", ")}. ${metrics.volatility > 15 ? "High demand volatility suggests external drivers beyond standard promotional activity." : "Volatility is within acceptable range for this category."}`,
+  };
+
+  // Benchmark Assessment
+  const benchmarkAssessment = {
+    title: "Benchmark Assessment",
+    content: `For ${sku.id}, the current forecast of ${metrics.runRate.toLocaleString()} cases/month compares against: Run-rate (last 6 weeks): ${Math.round(metrics.runRate * 0.98).toLocaleString()} cases/month. LY: ${Math.round(metrics.runRate * (1 - metrics.lyChange / 100)).toLocaleString()} cases/month. L2Y: ${Math.round(metrics.runRate * 0.88).toLocaleString()} cases/month. ${bestHeuristic} benchmark shows ${bestAlignment}% alignment with historical actuals — the strongest among all heuristics. ${metrics.accuracy > 85 ? "Service rates have been stable above 95%." : "Service rates have shown recent pressure, suggesting forecast gaps."} ${Math.abs(metrics.cocChange) > 10 ? `The ${Math.abs(metrics.cocChange)}% shift appears ${metrics.accuracy > 80 ? "partially" : "poorly"} supported by historical patterns and requires review.` : "Current forecast levels are consistent with benchmark signals."}`,
+  };
+
+  // ML Reliability
+  const mlReliability = {
+    title: "ML Reliability & Human Override History",
+    content: `For ${sku.id}, the ML forecast has historically achieved ${metrics.accuracy}% accuracy. ${metrics.accuracy < 80 ? `The model consistently ${metrics.bias > 0 ? "over" : "under"}-forecasts during peak demand periods, with accuracy dropping to ~${Math.round(metrics.accuracy * 0.85)}% during seasonal transitions.` : `Model performance is stable across seasons with minor ${metrics.bias > 0 ? "over" : "under"}-forecasting tendency.`} Historical analyst adjustments ${metrics.accuracy < 80 ? "improved accuracy by ~10pp when applied" : "have had marginal impact, suggesting ML signal is strong"}. S&OP overrides ${metrics.accuracy > 85 ? "rarely needed" : "have historically improved accuracy to ~" + Math.min(95, Math.round(metrics.accuracy * 1.15)) + "%"}. Confidence signal: ${metrics.accuracy > 85 ? "HIGH" : metrics.accuracy > 75 ? "MEDIUM" : "LOW"} — ${metrics.accuracy > 85 ? "ML signal reliable, minimal review needed." : "human review recommended as ML drift is likely."}`,
+  };
+
+  // Recommendation
+  const recommendation = {
+    title: "Recommendation",
+    content: `${Math.abs(metrics.cocChange) > 5 && metrics.accuracy < 80 ? `ADJUST: The CoC change of ${metrics.cocChange > 0 ? "+" : ""}${metrics.cocChange}% lacks supporting signals from run-rate, benchmarks, or promotional plans. Recommend reverting to prior cycle level and applying ${bestHeuristic}-based correction factor.` : Math.abs(metrics.cocChange) > 5 && metrics.accuracy >= 80 ? `ACCEPT WITH ENRICHMENT: The ${metrics.cocChange > 0 ? "uplift" : "decline"} is partially supported by ${bestHeuristic} alignment (${bestAlignment}%) and seasonal patterns. Recommend accepting the directional shift but moderating magnitude by ${Math.round(Math.abs(metrics.cocChange) * 0.3)}pp.` : `ACCEPT: Current forecast changes are within normal bounds. ${bestHeuristic} alignment at ${bestAlignment}% supports the current trajectory. No manual intervention required.`} Bias assessment: ${Math.abs(metrics.bias) > 5 ? `Systematic ${metrics.bias > 0 ? "over" : "under"}-forecasting bias of ${Math.abs(metrics.bias).toFixed(1)}% detected — recommend bias correction.` : "Forecast bias is stable and within acceptable range."}`,
+  };
+
+  // Final Summary
+  const finalSummary = {
+    title: "Final Forecast Summary",
+    content: `After review, ${sku.name} (${sku.region}, ${sku.channel}) forecast stands at ${metrics.runRate.toLocaleString()} cases/month. CoC: ${metrics.cocChange > 0 ? "+" : ""}${metrics.cocChange}%. vs LY: ${metrics.lyChange > 0 ? "+" : ""}${metrics.lyChange}%. Forecast accuracy: ${metrics.accuracy}%. Confidence: ${confidence.total}%. ${anomalies.length} anomalies detected — ${anomalies.length > 5 ? "elevated count suggests structural demand shift." : "within acceptable threshold."} Primary benchmark: ${bestHeuristic} (${bestAlignment}% alignment). ${metrics.flags.length > 0 ? `Active flags: ${metrics.flags.map(f => f.replace(/_/g, " ")).join(", ")}.` : "No active flags."}`,
+  };
+
+  return { movement, drivers, benchmarkAssessment, mlReliability, recommendation, finalSummary, metrics, confidence };
+}
+
+export function generateBusinessSummary(skuIds: string[]) {
+  const allMetrics = skuIds.map(id => ({ sku: skuMaster.find(s => s.id === id)!, metrics: computeSKUForecastMetrics(id) }));
+  const totalRunRate = allMetrics.reduce((a, m) => a + m.metrics.runRate, 0);
+  const avgAccuracy = +(allMetrics.reduce((a, m) => a + m.metrics.accuracy, 0) / allMetrics.length).toFixed(1);
+  const avgCoCChange = +(allMetrics.reduce((a, m) => a + m.metrics.cocChange, 0) / allMetrics.length).toFixed(1);
+  const totalCoCCases = Math.round(totalRunRate * Math.abs(avgCoCChange) / 100);
+
+  const movers = allMetrics
+    .sort((a, b) => Math.abs(b.metrics.cocChange) - Math.abs(a.metrics.cocChange))
+    .slice(0, 3);
+  const upMovers = movers.filter(m => m.metrics.cocChange > 0);
+  const downMovers = movers.filter(m => m.metrics.cocChange < 0);
+
+  // Brand-level aggregation
+  const byBrand = new Map<string, { cocSum: number; count: number }>();
+  allMetrics.forEach(m => {
+    const existing = byBrand.get(m.sku.brand) || { cocSum: 0, count: 0 };
+    existing.cocSum += m.metrics.cocChange;
+    existing.count++;
+    byBrand.set(m.sku.brand, existing);
+  });
+  const brandSummaries = Array.from(byBrand.entries()).map(([brand, data]) => ({
+    brand,
+    avgCoC: +(data.cocSum / data.count).toFixed(1),
+  }));
+
+  return {
+    totalRunRate,
+    avgAccuracy,
+    avgCoCChange,
+    totalCoCCases,
+    upMovers,
+    downMovers,
+    brandSummaries,
+    skuCount: skuIds.length,
+    flaggedCount: allMetrics.filter(m => m.metrics.flags.length > 0).length,
+  };
+}
+
 // ========== SAVED SCENARIOS ==========
 export interface SavedScenario {
+  id: string;
+  name: string;
+  timestamp: string;
+  skuId: string;
+  materialId: string;
+  substituteId: string;
+  triggerId: string | null;
+  triggerTitle: string | null;
+  costSim: ReturnType<typeof simulateLandedCost>;
+  multiMetric: MultiMetricResult;
+}
   id: string;
   name: string;
   timestamp: string;
