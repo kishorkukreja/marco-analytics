@@ -696,3 +696,161 @@ export interface SavedScenario {
   costSim: ReturnType<typeof simulateLandedCost>;
   multiMetric: MultiMetricResult;
 }
+
+// ========== LAB INTELLIGENCE ==========
+
+export interface LabBOMEntry {
+  materialId: string;
+  compositionPct: number;
+}
+
+export interface SimulatedProperties {
+  pH: number;
+  viscosity: number;
+  density: number;
+  foamIndex: number;
+  textureScore: number;
+  consistencyRating: number;
+}
+
+export interface QualityThresholds {
+  pH: [number, number];
+  viscosity: [number, number];
+  density: [number, number];
+  foamIndex: [number, number];
+  textureScore: [number, number];
+  consistencyRating: [number, number];
+}
+
+export const categoryThresholds: Record<string, QualityThresholds> = {
+  Laundry: {
+    pH: [8.0, 11.0],
+    viscosity: [20, 80],
+    density: [1.0, 1.4],
+    foamIndex: [60, 95],
+    textureScore: [50, 90],
+    consistencyRating: [60, 95],
+  },
+  Dishwash: {
+    pH: [6.5, 9.0],
+    viscosity: [25, 70],
+    density: [1.0, 1.3],
+    foamIndex: [70, 98],
+    textureScore: [55, 92],
+    consistencyRating: [65, 95],
+  },
+  "Personal Care": {
+    pH: [4.5, 7.0],
+    viscosity: [100, 800],
+    density: [1.0, 1.2],
+    foamIndex: [40, 85],
+    textureScore: [70, 98],
+    consistencyRating: [75, 98],
+  },
+  "Home Care": {
+    pH: [6.0, 10.0],
+    viscosity: [15, 60],
+    density: [1.0, 1.3],
+    foamIndex: [50, 90],
+    textureScore: [45, 85],
+    consistencyRating: [55, 90],
+  },
+};
+
+export function simulateFormulation(bomEntries: LabBOMEntry[], category: string): { properties: SimulatedProperties; verdict: "Pass" | "Review" | "Fail"; details: Record<string, "pass" | "review" | "fail"> } {
+  const totalPct = bomEntries.reduce((s, e) => s + e.compositionPct, 0);
+  // Remainder is water/filler with neutral properties
+  const waterPct = Math.max(0, 100 - totalPct);
+
+  let pH = 7.0 * (waterPct / 100);
+  let viscosity = 1.0 * (waterPct / 100);
+  let density = 1.0 * (waterPct / 100);
+  let foamNumerator = 0;
+  let humectantPct = 0;
+
+  bomEntries.forEach(entry => {
+    const mat = materialMaster.find(m => m.id === entry.materialId);
+    if (!mat) return;
+    const frac = entry.compositionPct / 100;
+    pH += mat.pH * frac;
+    viscosity += mat.viscosity * frac;
+    density += mat.density * frac;
+    if (mat.type === "Surfactant") {
+      foamNumerator += mat.performanceIndex * frac;
+    }
+    if (mat.type === "Humectant") {
+      humectantPct += entry.compositionPct;
+    }
+  });
+
+  // Foam index: surfactant performance weighted, scaled to 0-100
+  const foamIndex = Math.min(100, foamNumerator * 3 + 20);
+
+  // Texture score: function of viscosity and humectant
+  const viscNorm = Math.min(1, viscosity / 500);
+  const humNorm = Math.min(1, humectantPct / 20);
+  const textureScore = Math.min(100, (viscNorm * 50 + humNorm * 40 + 10));
+
+  // Consistency: composite of density stability and pH balance
+  const densityScore = density >= 1.0 && density <= 1.5 ? 90 : density > 1.5 ? 70 : 60;
+  const pHScore = pH >= 5 && pH <= 10 ? 90 : 65;
+  const consistencyRating = Math.min(100, (densityScore * 0.5 + pHScore * 0.3 + foamIndex * 0.2));
+
+  const properties: SimulatedProperties = {
+    pH: +pH.toFixed(2),
+    viscosity: +viscosity.toFixed(1),
+    density: +density.toFixed(3),
+    foamIndex: +foamIndex.toFixed(1),
+    textureScore: +textureScore.toFixed(1),
+    consistencyRating: +consistencyRating.toFixed(1),
+  };
+
+  const thresholds = categoryThresholds[category] || categoryThresholds["Laundry"];
+  const details: Record<string, "pass" | "review" | "fail"> = {};
+  let failCount = 0;
+  let reviewCount = 0;
+
+  (Object.keys(thresholds) as (keyof QualityThresholds)[]).forEach(key => {
+    const [lo, hi] = thresholds[key];
+    const val = properties[key];
+    const margin = (hi - lo) * 0.1; // 10% buffer for review zone
+    if (val >= lo && val <= hi) {
+      details[key] = "pass";
+    } else if (val >= lo - margin && val <= hi + margin) {
+      details[key] = "review";
+      reviewCount++;
+    } else {
+      details[key] = "fail";
+      failCount++;
+    }
+  });
+
+  const verdict = failCount > 0 ? "Fail" : reviewCount > 1 ? "Review" : reviewCount === 1 ? "Review" : "Pass";
+
+  return { properties, verdict, details };
+}
+
+export function getRecipeBOM(skuId: string): LabBOMEntry[] {
+  return bomTable
+    .filter(b => b.skuId === skuId)
+    .map(b => ({ materialId: b.materialId, compositionPct: b.compositionPct }));
+}
+
+export function getBOMCost(bomEntries: LabBOMEntry[]): number {
+  return bomEntries.reduce((total, entry) => {
+    const mat = materialMaster.find(m => m.id === entry.materialId);
+    return total + (mat ? mat.costPerKg * entry.compositionPct / 100 : 0);
+  }, 0);
+}
+
+export interface SavedExperiment {
+  id: string;
+  name: string;
+  skuId: string;
+  date: string;
+  rdBom: LabBOMEntry[];
+  results: ReturnType<typeof simulateFormulation>;
+  recipeCost: number;
+  rdCost: number;
+  notes: string;
+}
