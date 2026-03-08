@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Target, AlertCircle, Lightbulb, BarChart3, ChevronDown, ArrowRight, CheckCircle2, Clock } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Target, AlertCircle, Lightbulb, BarChart3, ChevronDown, ArrowRight, CheckCircle2, Clock, BookOpen, FlaskConical } from "lucide-react";
 import { KPICard } from "@/components/shared/KPICard";
 import { GlobalFilters, FilterState, defaultFilters, filterSKUs } from "@/components/shared/GlobalFilters";
 import { InlineNudge } from "@/components/shared/InlineNudge";
