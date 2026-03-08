@@ -75,8 +75,10 @@ const statusIcon = {
 };
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [expandedSKU, setExpandedSKU] = useState<string | null>(null);
+  const [narrativeSKU, setNarrativeSKU] = useState<string | null>(null);
   const filteredSKUs = useMemo(() => filterSKUs(filters), [filters]);
 
   const filteredKPIs = useMemo(() => {
