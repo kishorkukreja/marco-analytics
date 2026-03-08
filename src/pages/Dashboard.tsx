@@ -278,7 +278,7 @@ const Dashboard = () => {
         </div>
       </motion.div>
 
-      {/* Trend + Savings */}
+      {/* Trend + Tabbed Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="lg:col-span-2 kpi-card">
           <h3 className="text-sm font-semibold mb-4">Cost, Revenue & Margin Trend</h3>
@@ -286,38 +286,105 @@ const Dashboard = () => {
             <AreaChart data={trendData}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(213, 62%, 14%)" stopOpacity={0.12} />
-                  <stop offset="95%" stopColor="hsl(213, 62%, 14%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.12} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0.08} />
-                  <stop offset="95%" stopColor="hsl(0, 72%, 51%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.08} />
+                  <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" domain={[20, 45]} tickFormatter={v => `${v}%`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `$${v}M`} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" domain={[20, 50]} tickFormatter={v => `${v}%`} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="hsl(213, 62%, 14%)" fill="url(#revGrad)" strokeWidth={2} name="Revenue ($M)" />
-              <Area yAxisId="left" type="monotone" dataKey="totalCost" stroke="hsl(0, 72%, 51%)" fill="url(#costGrad)" strokeWidth={1.5} strokeDasharray="4 4" name="Cost ($M)" />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" fill="url(#revGrad)" strokeWidth={2} name="Revenue ($M)" />
+              <Area yAxisId="left" type="monotone" dataKey="totalCost" stroke="hsl(var(--destructive))" fill="url(#costGrad)" strokeWidth={1.5} strokeDasharray="4 4" name="Cost ($M)" />
               <Area yAxisId="right" type="monotone" dataKey="margin" stroke="hsl(160, 64%, 40%)" fill="none" strokeWidth={2} name="Margin (%)" />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="kpi-card">
-          <h3 className="text-sm font-semibold mb-4">Savings by Category</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={filteredSavings} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(215, 16%, 47%)" tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
-              <YAxis dataKey="category" type="category" tick={{ fontSize: 11 }} stroke="hsl(215, 16%, 47%)" width={85} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
-              <Bar dataKey="realized" fill="hsl(160, 64%, 40%)" radius={[0, 4, 4, 0]} name="Realized" />
-              <Bar dataKey="potential" fill="hsl(214, 20%, 90%)" radius={[0, 4, 4, 0]} name="Potential" />
-            </BarChart>
-          </ResponsiveContainer>
+          <Tabs defaultValue="savings" className="w-full">
+            <TabsList className="w-full h-7 mb-3">
+              <TabsTrigger value="savings" className="text-[10px] flex-1">Savings</TabsTrigger>
+              <TabsTrigger value="cost" className="text-[10px] flex-1">Cost Trend</TabsTrigger>
+              <TabsTrigger value="service" className="text-[10px] flex-1">Service Level</TabsTrigger>
+              <TabsTrigger value="channel" className="text-[10px] flex-1">Channel</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="savings" className="mt-0">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={filteredSavings} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
+                  <YAxis dataKey="category" type="category" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" width={80} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
+                  <Bar dataKey="realized" fill="hsl(160, 64%, 40%)" radius={[0, 4, 4, 0]} name="Realized" />
+                  <Bar dataKey="potential" fill="hsl(var(--muted))" radius={[0, 4, 4, 0]} name="Potential" />
+                </BarChart>
+              </ResponsiveContainer>
+            </TabsContent>
+
+            <TabsContent value="cost" className="mt-0">
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={costOverTime}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `$${v}M`} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                  <Legend wrapperStyle={{ fontSize: 9 }} />
+                  <Line type="monotone" dataKey="Laundry" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="Dishwash" stroke="hsl(160, 64%, 40%)" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="Personal Care" stroke="hsl(var(--destructive))" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="Home Care" stroke="hsl(45, 93%, 47%)" strokeWidth={1.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </TabsContent>
+
+            <TabsContent value="service" className="mt-0">
+              <div className="space-y-3 py-1">
+                {serviceLevelData.map(s => (
+                  <div key={s.category} className="p-2.5 rounded-lg bg-muted/30 space-y-2">
+                    <p className="text-[11px] font-semibold">{s.category}</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-[10px] text-muted-foreground">Fill Rate</span>
+                        <span className={`text-[10px] font-bold ${s.fillRate > 95 ? "text-accent" : s.fillRate > 92 ? "text-foreground" : "text-destructive"}`}>{s.fillRate}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[10px] text-muted-foreground">OTD</span>
+                        <span className={`text-[10px] font-bold ${s.onTimeDelivery > 95 ? "text-accent" : s.onTimeDelivery > 90 ? "text-foreground" : "text-destructive"}`}>{s.onTimeDelivery}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[10px] text-muted-foreground">Stockout Days</span>
+                        <span className={`text-[10px] font-bold ${s.stockoutDays < 3 ? "text-accent" : s.stockoutDays < 7 ? "text-warning" : "text-destructive"}`}>{s.stockoutDays}d</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[10px] text-muted-foreground">Fcst Accuracy</span>
+                        <span className={`text-[10px] font-bold ${s.forecastAccuracy > 92 ? "text-accent" : s.forecastAccuracy > 88 ? "text-foreground" : "text-destructive"}`}>{s.forecastAccuracy}%</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="channel" className="mt-0">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={marginByChannel}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="channel" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={v => `${v}%`} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: number, name: string) => name === "avgMargin" ? `${v}%` : `$${(v / 1e6).toFixed(1)}M`} />
+                  <Bar dataKey="avgMargin" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Avg Margin %" />
+                </BarChart>
+              </ResponsiveContainer>
+            </TabsContent>
+          </Tabs>
         </motion.div>
       </div>
     </div>
