@@ -24,13 +24,62 @@ const LandingPage = () => {
   const revGrowth = +((latestTrend.revenue - prevTrend.revenue) / prevTrend.revenue * 100).toFixed(1);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* ===== HERO ===== */}
-      <section className="relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-background relative overflow-hidden">
+      {/* Animated gradient mesh background */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <motion.div
+          className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] opacity-[0.07]"
+          animate={{
+            rotate: [0, 360],
+          }}
+          transition={{ duration: 120, repeat: Infinity, ease: "linear" }}
+          style={{
+            background: `
+              radial-gradient(ellipse 600px 400px at 20% 30%, hsl(var(--primary)) 0%, transparent 70%),
+              radial-gradient(ellipse 500px 350px at 70% 60%, hsl(var(--accent)) 0%, transparent 70%),
+              radial-gradient(ellipse 400px 300px at 50% 80%, hsl(var(--chart-3)) 0%, transparent 70%)
+            `,
+          }}
+        />
+        <motion.div
+          className="absolute top-0 left-0 w-full h-full opacity-[0.05]"
+          animate={{
+            scale: [1, 1.1, 1],
+            x: [0, 30, 0],
+            y: [0, -20, 0],
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            background: `
+              radial-gradient(ellipse 500px 500px at 80% 20%, hsl(var(--accent)) 0%, transparent 60%),
+              radial-gradient(ellipse 400px 400px at 20% 70%, hsl(var(--primary)) 0%, transparent 60%)
+            `,
+          }}
+        />
+        <motion.div
+          className="absolute top-0 left-0 w-full h-full opacity-[0.04]"
+          animate={{
+            scale: [1.1, 1, 1.1],
+            x: [-20, 20, -20],
+            y: [10, -10, 10],
+          }}
+          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            background: `
+              radial-gradient(ellipse 350px 350px at 60% 40%, hsl(var(--chart-3)) 0%, transparent 60%),
+              radial-gradient(ellipse 300px 300px at 30% 50%, hsl(var(--secondary)) 0%, transparent 60%)
+            `,
+          }}
+        />
+        {/* Dot grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, hsl(var(--foreground)) 1px, transparent 0)`,
           backgroundSize: "32px 32px",
         }} />
+      </div>
+
+      {/* ===== HERO ===== */}
+      <section className="relative overflow-hidden">
 
         <div className="relative max-w-[1400px] mx-auto px-6 pt-8 pb-12">
           <motion.div
