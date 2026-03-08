@@ -42,7 +42,7 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
         <div className="h-6 w-px bg-border" />
-        <span className="text-sm font-medium text-foreground">Global CPG Portfolio</span>
+        <span className="text-sm font-medium text-foreground">Margin & Cost Intelligence</span>
         <Badge variant="outline" className="text-[10px] uppercase tracking-wider">Live</Badge>
       </div>
 
