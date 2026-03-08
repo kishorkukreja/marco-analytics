@@ -143,12 +143,23 @@ const SimulationEngine = () => {
       setMcIterations(0);
     }
   }, [monteCarloEnabled, simComplete, costSim, runMonteCarlo]);
+  const waterfallData = costSim ? [
     { name: "Formulation", value: -(costSim.original.formulation - costSim.substitute.formulation), fill: costSim.original.formulation > costSim.substitute.formulation ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Freight", value: -(costSim.original.freight - costSim.substitute.freight), fill: costSim.original.freight > costSim.substitute.freight ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Duty", value: -(costSim.original.duty - costSim.substitute.duty), fill: costSim.original.duty > costSim.substitute.duty ? "hsl(160, 64%, 40%)" : "hsl(0, 72%, 51%)" },
     { name: "Packaging", value: -costSim.substitute.packaging, fill: "hsl(0, 72%, 51%)" },
     { name: "Warehouse", value: -(costSim.original.warehouse - costSim.substitute.warehouse), fill: costSim.original.warehouse > costSim.substitute.warehouse ? "hsl(160, 64%, 40%)" : "hsl(38, 92%, 50%)" },
   ] : [];
+
+  // Monte Carlo stats
+  const mcStats = useMemo(() => {
+    if (!mcData.length || !costSim) return null;
+    const totalCost = costSim.substitute.total;
+    const p5 = mcData.find(d => d.cumPct >= 5);
+    const p50 = mcData.find(d => d.cumPct >= 50);
+    const p95 = mcData.find(d => d.cumPct >= 95);
+    return { mean: totalCost, p5: p5?.bin || "", p50: p50?.bin || "", p95: p95?.bin || "" };
+  }, [mcData, costSim]);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
