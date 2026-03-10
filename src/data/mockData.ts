@@ -877,3 +877,168 @@ export interface SavedExperiment {
   rdCost: number;
   notes: string;
 }
+
+// ========== FORECAST DISAGGREGATION ==========
+
+export interface DisaggregationForecast {
+  skuId: string;
+  skuName: string;
+  category: string;
+  brand: string;
+  region: string;
+  channel: string;
+  currentRevenue: number;
+  monthlyForecasts: {
+    month: string;
+    baselineVolume: number;
+    agentVolume: number;
+    plannerVolume: number;
+    baselineRevenue: number;
+    agentRevenue: number;
+    plannerRevenue: number;
+    confidence: number;
+    baselineMargin: number;
+    agentMargin: number;
+  }[];
+  totalForecastVolume: number;
+  volumeGrowth: number;
+  forecastConfidence: number;
+  marginContribution: number;
+  riskLevel: "low" | "medium" | "high";
+}
+
+const forecastMonths = ["Apr'25","May'25","Jun'25","Jul'25","Aug'25","Sep'25","Oct'25","Nov'25","Dec'25","Jan'26","Feb'26","Mar'26"];
+
+export function generateDisaggregationForecasts(skuIds: string[], horizon: number = 12): DisaggregationForecast[] {
+  return skuIds.map(skuId => {
+    const sku = skuMaster.find(s => s.id === skuId)!;
+    const metrics = computeSKUForecastMetrics(skuId);
+    const monthlyBase = sku.annualVolume / 12;
+    const pricePerUnit = sku.revenue / sku.annualVolume;
+
+    const monthlyForecasts = forecastMonths.slice(0, horizon).map((month, i) => {
+      const seasonality = 1 + Math.sin((i % 12) * Math.PI / 6) * 0.12;
+      const trend = 1 + i * 0.004;
+      const baseVol = Math.round(monthlyBase * seasonality * trend);
+      const agentVol = Math.round(baseVol * (1 + (Math.random() - 0.3) * 0.06));
+      const plannerVol = Math.round(agentVol * (1 + (Math.random() - 0.5) * 0.03));
+      const confidence = +(72 + Math.random() * 23).toFixed(1);
+      const baseMargin = sku.currentMargin + (Math.random() - 0.5) * 3;
+      const agentMargin = baseMargin + (Math.random() - 0.3) * 1.5;
+
+      return {
+        month,
+        baselineVolume: baseVol,
+        agentVolume: agentVol,
+        plannerVolume: plannerVol,
+        baselineRevenue: Math.round(baseVol * pricePerUnit),
+        agentRevenue: Math.round(agentVol * pricePerUnit),
+        plannerRevenue: Math.round(plannerVol * pricePerUnit),
+        confidence,
+        baselineMargin: +baseMargin.toFixed(1),
+        agentMargin: +agentMargin.toFixed(1),
+      };
+    });
+
+    const totalForecastVolume = monthlyForecasts.reduce((s, m) => s + m.baselineVolume, 0);
+    const volumeGrowth = +((totalForecastVolume / sku.annualVolume - 1) * 100).toFixed(1);
+    const forecastConfidence = +(monthlyForecasts.reduce((s, m) => s + m.confidence, 0) / monthlyForecasts.length).toFixed(1);
+    const marginContribution = +(sku.currentMargin * sku.revenue / 1000000).toFixed(2);
+    const riskLevel: "low" | "medium" | "high" = metrics.accuracy < 75 || metrics.volatility > 20 ? "high" : metrics.accuracy < 85 || metrics.volatility > 12 ? "medium" : "low";
+
+    return {
+      skuId,
+      skuName: sku.name,
+      category: sku.category,
+      brand: sku.brand,
+      region: sku.region,
+      channel: sku.channel,
+      currentRevenue: sku.revenue,
+      monthlyForecasts,
+      totalForecastVolume,
+      volumeGrowth,
+      forecastConfidence,
+      marginContribution,
+      riskLevel,
+    };
+  });
+}
+
+export interface ComponentDemand {
+  materialId: string;
+  materialName: string;
+  materialType: string;
+  monthlyDemand: { month: string; demandKg: number }[];
+  totalDemand: number;
+}
+
+export function computeComponentDemand(skuIds: string[], horizon: number = 12): ComponentDemand[] {
+  const forecasts = generateDisaggregationForecasts(skuIds, horizon);
+  const materialDemandMap = new Map<string, number[]>();
+
+  forecasts.forEach(fc => {
+    const skuBom = bomTable.filter(b => b.skuId === fc.skuId);
+    skuBom.forEach(bomEntry => {
+      if (!materialDemandMap.has(bomEntry.materialId)) {
+        materialDemandMap.set(bomEntry.materialId, new Array(horizon).fill(0));
+      }
+      const arr = materialDemandMap.get(bomEntry.materialId)!;
+      fc.monthlyForecasts.forEach((mf, i) => {
+        arr[i] += mf.baselineVolume * (bomEntry.compositionPct / 100);
+      });
+    });
+  });
+
+  return Array.from(materialDemandMap.entries()).map(([matId, demands]) => {
+    const mat = materialMaster.find(m => m.id === matId)!;
+    return {
+      materialId: matId,
+      materialName: mat.name,
+      materialType: mat.type,
+      monthlyDemand: forecastMonths.slice(0, horizon).map((month, i) => ({
+        month,
+        demandKg: Math.round(demands[i]),
+      })),
+      totalDemand: Math.round(demands.reduce((a, b) => a + b, 0)),
+    };
+  }).sort((a, b) => b.totalDemand - a.totalDemand);
+}
+
+export interface DisaggregationKPIs {
+  forecastedRevenue: number;
+  revenueSparkline: number[];
+  volumeGrowth: number;
+  growthSparkline: number[];
+  forecastAccuracy: number;
+  accuracySparkline: number[];
+  demandVolatility: number;
+  volatilitySparkline: number[];
+  marginImpact: number;
+  marginSparkline: number[];
+}
+
+export function computeDisaggregationKPIs(skuIds: string[]): DisaggregationKPIs {
+  const forecasts = generateDisaggregationForecasts(skuIds);
+  const allMetrics = skuIds.map(id => computeSKUForecastMetrics(id));
+
+  const forecastedRevenue = forecasts.reduce((s, f) => s + f.monthlyForecasts.reduce((ms, m) => ms + m.baselineRevenue, 0), 0);
+  const volumeGrowth = +(forecasts.reduce((s, f) => s + f.volumeGrowth, 0) / forecasts.length).toFixed(1);
+  const forecastAccuracy = +(allMetrics.reduce((s, m) => s + m.accuracy, 0) / allMetrics.length).toFixed(1);
+  const demandVolatility = +(allMetrics.reduce((s, m) => s + m.volatility, 0) / allMetrics.length).toFixed(1);
+  const avgMargin = +(skuIds.reduce((s, id) => s + (skuMaster.find(sk => sk.id === id)?.currentMargin || 30), 0) / skuIds.length).toFixed(1);
+
+  const spark = (base: number, vol: number) => Array.from({ length: 8 }, (_, i) => +(base + Math.sin(i * 0.8) * vol + (Math.random() - 0.5) * vol * 0.5).toFixed(1));
+
+  return {
+    forecastedRevenue,
+    revenueSparkline: spark(forecastedRevenue / 12, forecastedRevenue / 120),
+    volumeGrowth,
+    growthSparkline: spark(volumeGrowth, 2),
+    forecastAccuracy,
+    accuracySparkline: spark(forecastAccuracy, 3),
+    demandVolatility,
+    volatilitySparkline: spark(demandVolatility, 2),
+    marginImpact: avgMargin,
+    marginSparkline: spark(avgMargin, 2),
+  };
+}
