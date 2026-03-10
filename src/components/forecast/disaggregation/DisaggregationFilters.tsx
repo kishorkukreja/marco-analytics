@@ -101,3 +101,17 @@ export function DisaggregationFilters({ filters, onChange }: Props) {
     </div>
   );
 }
+
+function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+  return (
+    <Select value={value || "all"} onValueChange={onChange}>
+      <SelectTrigger className="w-[130px] h-8 text-xs">
+        <SelectValue placeholder={label} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All {label}s</SelectItem>
+        {options.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
